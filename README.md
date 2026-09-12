@@ -46,7 +46,7 @@ compilada (`dist/`, que va **commiteada** — en la caja nunca se compila nada).
 
 Todo esto es **una sola vez**. Se hace por SSH (`LACASITA@100.95.133.90`).
 
-### 1. Clonar (lo hace el usuario)
+### 1. Clonar
 
 ```
 cd C:\Users\LACASITA\Desktop
@@ -97,8 +97,13 @@ Tunnel no funciona (el vigilante lo avisa en su log).
 ### 5. Dejarlo vivo
 
 ```
-scripts\instalar-tarea.bat <contraseña de Windows de LACASITA>
+scripts\instalar-tarea.bat
 ```
+
+(La pide sola y no se ve al teclearla. Si lo estás haciendo por SSH, donde no hay
+pantalla para escribir, usa la vía sin preguntas:
+`$env:CLAVE_TAREA="..."` y luego
+`powershell -NoProfile -ExecutionPolicy Bypass -File scripts\instalar-tarea.ps1`.)
 
 Crea la tarea programada `LacasitaInvetory`, que corre al prender Windows y cada
 2 minutos: si la app no está escuchando, la levanta; si `cloudflared` se cayó, lo
@@ -192,9 +197,11 @@ node scripts/verificar-permisos.js
 
 | Lote | Cada | Cuesta |
 |---|---|---|
-| Stock, apartados y ventas por área | 5 min | ~0.25 s |
+| Stock, apartados y ventas por área | 5 min | **0.5 s** |
 | Última venta (ventana de 120 días) + catálogo | 30 min | ~4 s |
-| Historial completo (4.5 años) + catálogo completo | 6 h y al arrancar | ~9 s |
+| Historial completo (4.5 años) + catálogo completo | 6 h y al arrancar | **9.4 s** |
+
+(Medido el 2026-09-11 en la computadora de la tienda, con el login `inventory_ro`.)
 
 ---
 
