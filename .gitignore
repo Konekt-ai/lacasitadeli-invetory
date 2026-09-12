@@ -1,0 +1,27 @@
+# Secretos y datos de la caja — NUNCA se suben
+.env
+.env.local
+*.pem
+
+# Dependencias
+node_modules/
+
+# Copia renombrada de node.exe (se hace en la caja, pesa ~80 MB)
+bin/
+
+# Logs y estado de la caja
+logs/
+
+# Temporales de medición/pruebas (no son parte del producto)
+.medicion*
+resultados-*.json
+pruebas/capturas/
+test-results/
+playwright-report/
+
+# Windows / editores
+Thumbs.db
+Desktop.ini
+.DS_Store
+.vscode/
+.idea/

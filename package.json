@@ -1,0 +1,45 @@
+{
+  "name": "lacasitadeli-invetory",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Consulta de inventario desde el celular (solo lectura) para La Casita Deli",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "dev-web": "vite",
+    "build": "vite build",
+    "test": "vitest run",
+    "test-ui": "vitest",
+    "hash-contrasena": "node scripts/hash-contrasena.js",
+    "verificar-permisos": "node scripts/verificar-permisos.js",
+    "diagnostico": "node scripts/diagnostico.js",
+    "probar-privacidad": "node scripts/probar-privacidad.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "better-sqlite3": "^12.2.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mssql": "^11.0.1",
+    "nodemailer": "^6.10.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "supertest": "^7.0.0",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
+  }
+}
