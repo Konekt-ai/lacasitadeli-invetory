@@ -201,6 +201,12 @@ export function armarSnapshot(datos, opciones = {}) {
     if (!p.nombre) p.nombre = p.nombreTC52 || p.concepto || p.codigo;
     p.foto = fotos.get(p.artCodigo ?? '') ?? fotos.get(p.codigo) ?? null;
     p.esCocina = esCocina({ codigo: p.codigo, categoria: p.categoria, nombre: p.nombre }, o.cocina);
+    // Lo que se vende pero NUNCA se ha contado en ninguna área casi siempre es
+    // comida preparada o un código genérico (baguette `030`, paella `003`,
+    // "REFRESCO IMPORTADO" `500008`). Las reglas de categoría no los agarran
+    // porque NovaCaja los tiene en "ABARROTES", igual que 8,912 productos normales.
+    p.nuncaContado = p.porArea.size === 0
+      || [...p.porArea.values()].every(a => a.cantidad === null || a.cantidad === undefined);
     p.nombreNormalizado = normalizar(p.nombre);
   }
 
@@ -283,7 +289,7 @@ export function armarSnapshot(datos, opciones = {}) {
         codigo: p.codigo, nombre: p.nombre, area, esCocina: p.esCocina, foto: p.foto,
         // ¿nunca se ha contado en NINGUNA área? casi siempre es comida preparada o
         // un código genérico: se esconde por defecto para que la lista sirva.
-        nuncaContado: p.porArea.size === 0 || [...p.porArea.values()].every(a => a.cantidad === null || a.cantidad === undefined),
+        nuncaContado: p.nuncaContado,
         vendidas14: vendidas,
         ...fila,
       });

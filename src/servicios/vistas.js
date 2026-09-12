@@ -125,16 +125,16 @@ export function vistaSinVenta(snap, filtros = {}, opciones = {}) {
     return piezasEnArea(b) - piezasEnArea(a) || (b.diasSinVenta ?? 1e9) - (a.diasSinVenta ?? 1e9);
   });
 
-  const total = lista.length;
+  const cuantos = lista.length;
   const desde = Math.max(0, (Number(pagina) || 1) - 1) * porPagina;
   return {
     tarjetas: tarjetasSinVenta(snap, opciones),
     filtros: { clase, area, dias: minDias, buscar, orden },
-    total,
+    cuantos,
     piezas: lista.reduce((s, p) => s + piezasEnArea(p), 0),
     pagina: Number(pagina) || 1,
     porPagina,
-    hayMas: desde + porPagina < total,
+    hayMas: desde + porPagina < cuantos,
     productos: lista.slice(desde, desde + porPagina).map(p => productoJson(p)),
   };
 }
@@ -187,7 +187,7 @@ export function vistaResurtido(snap, filtros = {}) {
   return {
     filtros: { area, incluirCocina, incluirSinConteo, buscar },
     areasVenta: snap.areasVenta,
-    totales: { urgentes: urgentes.length, bajos: bajos.length, sinConteo: sinConteo.length },
+    cuentas: { urgentes: urgentes.length, bajos: bajos.length, sinConteo: sinConteo.length },
     urgentes,
     bajos,
     sinConteo,
@@ -202,7 +202,9 @@ export function vistaMasVendidos(snap, filtros = {}) {
 
   const filas = [];
   for (const p of snap.productos) {
-    if (!incluirCocina && p.esCocina) continue;
+    // "Comida de cocina" incluye lo que nunca se contó: son los códigos genéricos
+    // con los que se cobra la comida hecha en casa y taparían el top de ventas.
+    if (!incluirCocina && (p.esCocina || p.nuncaContado)) continue;
     let piezas = 0;
     if (area) piezas = Number(p.porArea.get(area)?.[ventana] ?? 0);
     else piezas = Number(p.vendidas[campo] ?? 0);
@@ -223,7 +225,7 @@ export function vistaMasVendidos(snap, filtros = {}) {
   return {
     filtros: { dias: Number(dias) === 7 ? 7 : 30, area, incluirCocina },
     areasVenta: snap.areasVenta,
-    total: filas.length,
+    cuantos: filas.length,
     productos: filas.slice(0, limite),
   };
 }
@@ -232,7 +234,7 @@ export function vistaMasVendidos(snap, filtros = {}) {
 export function vistaBuscar(snap, { q = '', limite = 40 } = {}) {
   const crudo = String(q ?? '').trim();
   const texto = normalizar(crudo);
-  if (texto.length < 2) return { q: crudo, total: 0, productos: [] };
+  if (texto.length < 2) return { q: crudo, cuantos: 0, productos: [] };
 
   const palabrasBuscadas = texto.split(' ').filter(Boolean);
   const resultados = [];
@@ -249,7 +251,7 @@ export function vistaBuscar(snap, { q = '', limite = 40 } = {}) {
   resultados.sort((a, b) => b.puntos - a.puntos || b.p.piezas - a.p.piezas);
   return {
     q: crudo,
-    total: resultados.length,
+    cuantos: resultados.length,
     productos: resultados.slice(0, limite).map(r => productoJson(r.p)),
   };
 }

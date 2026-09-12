@@ -1,0 +1,62 @@
+/* Tipografías servidas por la propia app: el celular no depende de Google y la
+   CSP puede quedarse en 'self'. Solo los pesos que se usan. */
+@import '@fontsource/newsreader/latin-400-italic.css';
+@import '@fontsource/newsreader/latin-600-italic.css';
+@import '@fontsource/plus-jakarta-sans/latin-400.css';
+@import '@fontsource/plus-jakarta-sans/latin-500.css';
+@import '@fontsource/plus-jakarta-sans/latin-700.css';
+@import '@fontsource/inter/latin-500.css';
+@import '@fontsource/inter/latin-600.css';
+@import './fuentes/iconos.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    background: theme('colors.background');
+  }
+  body {
+    font-family: theme('fontFamily.body');
+    color: theme('colors.on-surface');
+    background: theme('colors.background');
+    /* Nada de rebote raro al hacer scroll en el celular */
+    overscroll-behavior-y: none;
+  }
+  /* Que nada se pegue a los bordes en pantallas con muesca */
+  .respeta-bordes {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+}
+
+@layer components {
+  .etiqueta {
+    @apply font-label text-[10px] uppercase tracking-widest text-on-surface-variant;
+  }
+  .titulo {
+    @apply font-headline italic;
+  }
+  .tarjeta {
+    @apply bg-surface-container-lowest border border-outline-variant/60 rounded-xl;
+  }
+  .boton {
+    @apply inline-flex items-center justify-center gap-2 rounded-full font-medium
+           transition-colors active:scale-[0.98] disabled:opacity-50;
+  }
+  .boton-lleno {
+    @apply boton bg-primary text-on-primary px-5 py-3;
+  }
+  .boton-suave {
+    @apply boton bg-surface-container text-on-surface px-4 py-2 border border-outline-variant/60;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium;
+  }
+}
+
+/* El scroll horizontal de las tarjetas, sin barra fea */
+.sin-barra::-webkit-scrollbar { display: none; }
+.sin-barra { scrollbar-width: none; }

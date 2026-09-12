@@ -5,9 +5,10 @@ Option Explicit
 '  Lo corre el Programador de Tareas cada 2 minutos. NO muestra ventanas.
 '
 '  QUE HACE:
-'   1) Si nadie escucha en 127.0.0.1:3010, ejecuta scripts\iniciar-app.bat.
-'   2) Revisa http://127.0.0.1:3011/ready (metricas de cloudflared).
+'   1) Si nadie escucha en 127.0.0.1:PUERTO, ejecuta scripts\iniciar-app.bat.
+'   2) Revisa /ready en el puerto de metricas de cloudflared.
 '   3) Solo arranca o reinicia cloudflared cuando de verdad hace falta.
+'   Los dos puertos salen del .env, el mismo que lee src/config.js.
 '
 '  POR QUE TANTO CUIDADO CON CLOUDFLARED:
 '   La URL del tunel rapido CAMBIA cada vez que arranca cloudflared. Si lo
@@ -16,6 +17,10 @@ Option Explicit
 '   reiniciar NO arregla nada y si cambia la URL. Por eso:
 '     - Si /ready responde bien, NO se toca nada.
 '     - Si /ready falla, se esperan 10 minutos seguidos antes de reiniciar.
+'     - Antes de reiniciar se revisa que SI haya internet: si no lo hay, el
+'       problema no es cloudflared y reiniciarlo solo cambiaria la URL.
+'     - Si aun despues de reiniciar sigue sin responder, la espera sube
+'       (10 -> 30 -> 60 min) para no estar reiniciando cada rato.
 '     - Nunca se mata por nombre: se confirma que el PID guardado sea de
 '       cloudflared.exe antes de cerrarlo.
 '
@@ -27,13 +32,17 @@ Option Explicit
 ' =============================================================================
 
 ' --- Ajustes (deben coincidir con el .env y con src/config.js) ---------------
-Const PUERTO_APP       = 3010          ' PUERTO
-Const PUERTO_METRICAS  = 3011          ' METRICAS_TUNEL
 Const MINUTOS_GRACIA   = 10            ' aguante antes de reiniciar el tunel
+Const MINUTOS_TOPE     = 60            ' aguante maximo cuando ya se reinicio
 Const TOPE_LOG_VIGILANTE = 1048576     ' 1 MB
 Const TOPE_LOG_TUNEL     = 5242880     ' 5 MB
 Const PARA_LEER = 1
 Const PARA_AGREGAR = 8
+
+' Los puertos NO van quemados: salen del .env, el mismo archivo que lee
+' src/config.js. Si alguien cambia PUERTO ahi, el vigilante revisa y arranca el
+' tunel en ese puerto, sin que queden dos verdades.
+Dim PUERTO_APP, PUERTO_METRICAS
 
 Dim sh, fso
 Dim RAIZ, LOGS, ARCH_LOG, ARCH_LOG_VIEJO, ARCH_PID, ARCH_ESTADO, ARCH_TUNEL, ARCH_TUNEL_VIEJO, ARCH_BAT
@@ -55,6 +64,9 @@ ARCH_TUNEL       = LOGS & "\cloudflared.log"
 ARCH_TUNEL_VIEJO = LOGS & "\cloudflared.1.log"
 ARCH_BAT         = RAIZ & "\scripts\iniciar-app.bat"
 
+PUERTO_APP      = NumeroEnv("PUERTO", 3010)
+PUERTO_METRICAS = PuertoDeMetricas(3011)
+
 ' El log se rota al principio, cuando todavia no lo tenemos abierto.
 RotarSiPasa ARCH_LOG, TOPE_LOG_VIGILANTE, ARCH_LOG_VIEJO
 
@@ -69,7 +81,10 @@ WScript.Quit 0
 '  Flujo principal
 ' =============================================================================
 Sub Principal()
-    Dim tunelListo, pidGuardado, pidVivo, pidSuelto, minutos, exe
+    ' Ojo con los nombres: una variable NO puede llamarse igual que una Function
+    ' (VBScript no distingue mayusculas y la variable le gana), por eso aqui es
+    ' "hayTunel" y no "tunelListo".
+    Dim hayTunel, pidGuardado, pidVivo, pidSuelto, minutos, espera, siguiente, exe
 
     ' ---- 1. La app -----------------------------------------------------------
     If PuertoEscuchando(PUERTO_APP) Then
@@ -92,12 +107,12 @@ Sub Principal()
     AvisarConfigCloudflared
 
     ' ---- 3. El tunel ---------------------------------------------------------
-    tunelListo  = TunelListo()
+    hayTunel    = TunelListo()
     pidGuardado = LeerPid()
     pidVivo     = False
     If pidGuardado > 0 Then pidVivo = EsCloudflared(pidGuardado)
 
-    If tunelListo Then
+    If hayTunel Then
         ' Sano: NO se reinicia nunca. Reiniciarlo le cambiaria la URL al duenio.
         BorrarEstadoFallo
         If Not pidVivo Then
@@ -128,16 +143,27 @@ Sub Principal()
             Exit Sub
         End If
 
-        ' No hay nada corriendo: aqui si hay que arrancar el tunel.
+        ' No hay nada corriendo: aqui si hay que arrancar el tunel. El reloj del
+        ' fallo empieza de cero con la espera normal: este tunel acaba de nacer.
         Apuntar "No hay cloudflared vivo. Se arranca el tunel."
+        ApuntarFallo MINUTOS_GRACIA
         ArrancarTunel
         Exit Sub
     End If
 
     ' El proceso vive pero /ready no contesta: casi siempre es falta de internet.
     minutos = MinutosFallando()
-    If minutos < MINUTOS_GRACIA Then
-        Apuntar "Sin /ready desde hace " & minutos & " min con PID " & pidGuardado & ". Se espera hasta " & MINUTOS_GRACIA & " min antes de tocarlo."
+    espera  = EsperaActual()
+    If minutos < espera Then
+        Apuntar "Sin /ready desde hace " & minutos & " min con PID " & pidGuardado & ". Se espera hasta " & espera & " min antes de tocarlo."
+        Exit Sub
+    End If
+
+    ' Si no hay internet, el problema NO es cloudflared: reiniciarlo no arregla
+    ' nada y si le cambia la URL al duenio. Se deja tal cual y se vuelve a ver
+    ' en la revision siguiente.
+    If Not HayInternet() Then
+        Apuntar "Sin /ready desde hace " & minutos & " min, pero tampoco hay internet. NO se toca cloudflared: reiniciarlo solo le cambiaria la URL al duenio."
         Exit Sub
     End If
 
@@ -146,6 +172,13 @@ Sub Principal()
         BorrarPid
         WScript.Sleep 2000
     End If
+
+    ' El reloj del fallo vuelve a empezar AQUI, no dentro de ArrancarTunel, y con
+    ' una espera mas larga: si el tunel nuevo tampoco responde, no se reinicia
+    ' cada rato (cada reinicio le cambia la URL al duenio).
+    siguiente = espera * 3
+    If siguiente > MINUTOS_TOPE Then siguiente = MINUTOS_TOPE
+    ApuntarFallo siguiente
     ArrancarTunel
 End Sub
 
@@ -175,7 +208,10 @@ Sub ArrancarTunel()
     pid = LanzarDesprendido(comando, RAIZ)
     If pid > 0 Then
         GuardarPid pid
-        BorrarEstadoFallo
+        ' OJO: aqui NO se borra el estado del fallo. Si se borrara, el reloj de
+        ' los minutos de gracia volveria a empezar en cada reinicio y un corte
+        ' largo de internet se volveria un reinicio (y una URL nueva) cada rato.
+        ' El borrado va donde corresponde: cuando /ready vuelve a responder.
         Apuntar "Tunel arrancado con " & exe & " y PID " & pid & ". La URL nueva queda en logs\cloudflared.log."
     Else
         Apuntar "ERROR: no se pudo arrancar cloudflared."
@@ -259,6 +295,14 @@ Function TunelListo()
     On Error GoTo 0
 
     Set x = Nothing
+End Function
+
+' Revisa si hay internet con un ping suelto a 1.1.1.1. Se busca "ttl=" porque
+' ese pedacito sale igual en Windows en espanol y en ingles.
+Function HayInternet()
+    Dim salida
+    salida = SalidaDe("ping -n 1 -w 2000 1.1.1.1")
+    HayInternet = (InStr(LCase(salida), "ttl=") > 0)
 End Function
 
 ' Avisa si hay un config.yml del usuario: con eso el tunel rapido no funciona.
@@ -417,6 +461,43 @@ Sub MarcarFalloSiHaceFalta()
     If Not fso.FileExists(ARCH_ESTADO) Then EscribirTexto ARCH_ESTADO, Sello()
 End Sub
 
+' Reinicia el reloj del fallo: primera linea la hora de ahora, segunda linea
+' cuantos minutos hay que aguantar antes de volver a tocar el tunel.
+Sub ApuntarFallo(espera)
+    Dim f
+    On Error Resume Next
+    Set f = fso.CreateTextFile(ARCH_ESTADO, True)
+    f.WriteLine Sello()
+    f.WriteLine CStr(espera)
+    f.Close
+    Err.Clear
+    On Error GoTo 0
+End Sub
+
+' Minutos que hay que aguantar en esta vuelta (segunda linea del archivo de
+' estado). Si no dice nada, la espera normal.
+Function EsperaActual()
+    Dim f, linea, texto
+    EsperaActual = MINUTOS_GRACIA
+    If Not fso.FileExists(ARCH_ESTADO) Then Exit Function
+
+    On Error Resume Next
+    texto = ""
+    Set f = fso.OpenTextFile(ARCH_ESTADO, PARA_LEER)
+    If Err.Number = 0 Then
+        If Not f.AtEndOfStream Then linea = f.ReadLine     ' la hora del fallo
+        If Not f.AtEndOfStream Then texto = Trim(f.ReadLine)
+        f.Close
+    End If
+    Err.Clear
+    On Error GoTo 0
+
+    If IsNumeric(texto) And texto <> "" Then
+        If CLng(texto) > 0 Then EsperaActual = CLng(texto)
+    End If
+    If EsperaActual > MINUTOS_TOPE Then EsperaActual = MINUTOS_TOPE
+End Function
+
 Sub BorrarEstadoFallo()
     BorrarArchivo ARCH_ESTADO
 End Sub
@@ -474,6 +555,61 @@ Function LeerInstante(ruta)
         LeerInstante = 0
     End If
     On Error GoTo 0
+End Function
+
+
+' =============================================================================
+'  Ajustes que salen del .env (el mismo archivo que lee src/config.js)
+' =============================================================================
+
+' Texto de una llave del .env, o "" si no esta. Se lee todo de un jalon para no
+' quedarse dando vueltas si el archivo se traba.
+Function TextoEnv(llave)
+    Dim f, todo, lineas, i, l, p
+    TextoEnv = ""
+    If Not fso.FileExists(RAIZ & "\.env") Then Exit Function
+
+    On Error Resume Next
+    todo = ""
+    Set f = fso.OpenTextFile(RAIZ & "\.env", PARA_LEER)
+    If Err.Number = 0 Then
+        If Not f.AtEndOfStream Then todo = f.ReadAll
+        f.Close
+    End If
+    Err.Clear
+    On Error GoTo 0
+
+    lineas = Split(Replace(todo, vbCr, ""), vbLf)
+    For i = 0 To UBound(lineas)
+        l = Trim(lineas(i))
+        p = InStr(l, "=")
+        If p > 1 And Left(l, 1) <> "#" Then
+            If UCase(Trim(Left(l, p - 1))) = UCase(llave) Then TextoEnv = Trim(Mid(l, p + 1))
+        End If
+    Next
+End Function
+
+' Numero de una llave del .env. Si no viene o no es numero, el valor por omision.
+Function NumeroEnv(llave, porOmision)
+    Dim t
+    NumeroEnv = porOmision
+    t = TextoEnv(llave)
+    If IsNumeric(t) And t <> "" Then NumeroEnv = CLng(t)
+End Function
+
+' En el .env las metricas van como direccion completa (http://127.0.0.1:3011).
+' Aqui solo hace falta el numero: lo que va despues del ultimo ":".
+Function PuertoDeMetricas(porOmision)
+    Dim t, p, n
+    PuertoDeMetricas = porOmision
+    t = TextoEnv("METRICAS_TUNEL")
+    Do While Right(t, 1) = "/"
+        t = Left(t, Len(t) - 1)
+    Loop
+    p = InStrRev(t, ":")
+    If p = 0 Then Exit Function
+    n = Trim(Mid(t, p + 1))
+    If IsNumeric(n) And n <> "" Then PuertoDeMetricas = CLng(n)
 End Function
 
 

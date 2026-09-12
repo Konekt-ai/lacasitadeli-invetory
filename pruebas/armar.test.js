@@ -88,7 +88,7 @@ describe('armarSnapshot', () => {
 describe('vistas', () => {
   it('sin-venta: tarjetas, filtro por clase y orden por piezas', () => {
     const v = vistaSinVenta(snap, { clase: 'descontinuado' }, OPCIONES);
-    expect(v.total).toBe(1);
+    expect(v.cuantos).toBe(1);
     expect(v.productos[0].codigo).toBe('012000809996');
     expect(v.tarjetas.find(t => t.clase === 'duplicado_probable').productos).toBe(1);
   });
@@ -137,7 +137,7 @@ describe('vistas', () => {
   it('buscar: por código y por nombre', () => {
     expect(vistaBuscar(snap, { q: '098733' }).productos[0].codigo).toBe('098733');
     expect(vistaBuscar(snap, { q: 'pepsi' }).productos[0].codigo).toBe('012000809996');
-    expect(vistaBuscar(snap, { q: 'z' }).total).toBe(0);
+    expect(vistaBuscar(snap, { q: 'z' }).cuantos).toBe(0);
   });
 
   it('ficha: muestra TODAS las áreas y separa "sin contar" de cero', () => {

@@ -29,6 +29,12 @@ rem ============================================================================
 rem --- Raiz del repo: una carpeta arriba de scripts\ ---------------------------
 for %%I in ("%~dp0..") do set "RAIZ=%%~fI"
 
+rem Todo corre desde la raiz del repo: server.js se busca aqui y dotenv lee el
+rem .env de la carpeta ACTUAL. Sin esto, dar doble clic al .bat o llamarlo desde
+rem otra carpeta arrancaria la app SIN .env (sin usuarios y sin SQL) y nadie se
+rem enteraria, porque de todos modos se pone a escuchar en el puerto.
+cd /d "%RAIZ%"
+
 set "CARPETA_LOGS=%RAIZ%\logs"
 set "CONSOLA=%CARPETA_LOGS%\consola.log"
 set "CONSOLA_VIEJA=%CARPETA_LOGS%\consola.1.log"
@@ -45,8 +51,13 @@ rem Topes para rotar: 2 MB la consola de la app, 1 MB el de este script.
 set "TOPE_CONSOLA=2097152"
 set "TOPE_ARRANQUE=1048576"
 
-rem El puerto sale del .env (PUERTO). Si no viene, se usa el mismo valor por
-rem omision que src/config.js.
+rem El puerto sale del .env de la caja (PUERTO), el MISMO archivo que lee
+rem src/config.js: si aqui quedara quemado y alguien cambiara el .env, este
+rem script buscaria la app en un puerto y la app estaria en otro. El for de
+rem adentro es para quitarle los espacios sobrantes al valor.
+rem Si el .env no dice nada, se usa el mismo valor por omision que src/config.js.
+rem El orden es el mismo de dotenv: lo que ya trae el ambiente, luego el .env.
+if not defined PUERTO if exist "%RAIZ%\.env" for /f "usebackq eol=# tokens=1,* delims==" %%K in ("%RAIZ%\.env") do if /i "%%K"=="PUERTO" for /f "tokens=1" %%V in ("%%L") do set "PUERTO=%%V"
 if not defined PUERTO set "PUERTO=3010"
 
 if not exist "%CARPETA_LOGS%" mkdir "%CARPETA_LOGS%" >nul 2>&1
@@ -135,7 +146,10 @@ rem  que cmd confunda con redirecciones.
 rem ============================================================================
 call :registrar "Arrancando bin\invetory-node.exe server.js en el puerto %PUERTO% ..."
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$c=[char]34; $m=[char]62+[char]62; $e=[char]62+[char]38+'1'; $a=$c+$env:ComSpec+$c+' /s /c '+$c+$c+$env:APP_EXE+$c+' server.js '+$m+$c+$env:APP_LOG+$c+' 2'+$e+$c; $s=([WMIClass]'Win32_ProcessStartup').CreateInstance(); $s.ShowWindow=0; $r=([WMIClass]'Win32_Process').Create($a,$env:APP_RAIZ,$s); exit [int]$r.ReturnValue"
+rem El try/catch no es adorno: si WMI esta caido o bloqueado, la llamada truena,
+rem $r se queda vacio y "exit [int]$r.ReturnValue" saldria con 0, o sea que el
+rem .bat creeria que la app arranco y el plan B de abajo nunca se usaria.
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $c=[char]34; $m=[char]62+[char]62; $e=[char]62+[char]38+'1'; $a=$c+$env:ComSpec+$c+' /s /c '+$c+$c+$env:APP_EXE+$c+' server.js '+$m+$c+$env:APP_LOG+$c+' 2'+$e+$c; $s=([WMIClass]'Win32_ProcessStartup').CreateInstance(); $s.ShowWindow=0; $r=([WMIClass]'Win32_Process').Create($a,$env:APP_RAIZ,$s); if ($null -eq $r) { exit 1 }; exit [int]$r.ReturnValue } catch { exit 1 }"
 if errorlevel 1 goto :arranque_sencillo
 goto :verificar
 
@@ -143,7 +157,7 @@ goto :verificar
 rem Plan B si PowerShell o WMI estan bloqueados: se arranca en esta consola.
 rem Ojo: asi la app SI muere si alguien cierra la ventana que la lanzo.
 call :registrar "AVISO: no se pudo arrancar con WMI. Se usa el modo sencillo; no cierres la ventana."
-start "Inventario La Casita" /b "%APP_EXE%" server.js >>"%CONSOLA%" 2>&1
+start "" /b "%APP_EXE%" "%SERVIDOR%" >>"%CONSOLA%" 2>&1
 
 :verificar
 rem Se le dan unos segundos y se revisa si de verdad quedo escuchando.
@@ -180,10 +194,15 @@ rem Revisa de quien es el PID que tiene el puerto antes de cerrarlo.
 set "IMAGEN="
 for /f "tokens=1" %%N in ('tasklist /fi "PID eq %OCUPADO%" /nh 2^>nul') do if not defined IMAGEN set "IMAGEN=%%N"
 if not defined IMAGEN exit /b 0
-rem "INFO:" = tasklist no encontro ese PID; el proceso ya murio solo.
-if /i "%IMAGEN%"=="INFO:" exit /b 0
+rem Si tasklist no encontro el PID imprime un aviso cuyo texto cambia con el
+rem idioma de Windows ("INFO:" en ingles, "INFORMACION:" en espanol). Lo unico
+rem seguro es que un nombre de programa acaba en .exe: si no acaba en .exe es el
+rem aviso, o sea que ese proceso ya murio solo y el puerto queda libre.
+if /i not "%IMAGEN:~-4%"==".exe" exit /b 0
+rem SOLO se cierra lo nuestro. La app de esta carpeta SIEMPRE se llama
+rem invetory-node.exe (asi la arranca este mismo script). node.exe es el nombre
+rem con el que corre el sistema admin de la tienda: no se toca nunca.
 if /i "%IMAGEN%"=="invetory-node.exe" goto :lp_cerrar
-if /i "%IMAGEN%"=="node.exe" goto :lp_cerrar
 set "IMAGEN_AJENA=%IMAGEN%"
 exit /b 1
 :lp_cerrar
