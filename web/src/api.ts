@@ -27,6 +27,7 @@ export type Producto = {
 
 export type Estado = {
   listo: boolean; calculando: boolean; usuario: string | null;
+  generado: string | null;   // ISO con -06:00 del momento en que se tomaron los datos
   actualizado: string | null; areas: Area[]; areasVenta: string[]; areasRespaldo: string[];
   resumen: { conPiezas: number; piezas: number; piezasParadas: number } | null;
   umbrales: { descontinuadoDias: number; lentoDias: number; nuevoDias: number; diasSugeridos: number; ventanaVentaDiariaDias: number };

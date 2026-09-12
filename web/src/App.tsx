@@ -15,6 +15,24 @@ const PESTANAS = [
   { ruta: '/buscar', icono: 'search', texto: 'Buscar' },
 ];
 
+const DIA_CDMX = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City' });
+const DIA_BONITO = new Intl.DateTimeFormat('es-MX', { timeZone: 'America/Mexico_City', day: 'numeric', month: 'short' });
+
+/**
+ * "Actualizado a las 14:30" cuando los datos son de hoy. Si la app estuvo sin
+ * visitas (deja de refrescar para no cargar el punto de venta), los datos pueden
+ * ser de anoche: entonces se dice el día, para que nadie tome una decisión
+ * creyendo que son de hace un rato.
+ */
+function textoActualizado(estado: Estado | null, refrescando: boolean) {
+  if (refrescando || estado?.calculando) return 'Actualizando…';
+  if (!estado?.actualizado || !estado.generado) return 'Juntando información…';
+  const fecha = new Date(estado.generado);
+  if (Number.isNaN(fecha.getTime())) return `Actualizado a las ${estado.actualizado}`;
+  if (DIA_CDMX.format(fecha) === DIA_CDMX.format(new Date())) return `Actualizado a las ${estado.actualizado}`;
+  return `Actualizado el ${DIA_BONITO.format(fecha)} a las ${estado.actualizado}`;
+}
+
 export function App() {
   const [ruta, setRuta] = useState(() => window.location.pathname);
   const [estado, setEstado] = useState<Estado | null>(null);
@@ -92,9 +110,7 @@ export function App() {
               <img src="/logo.png" alt="" className="h-9 w-9 rounded-lg object-contain" />
               <div className="min-w-0 flex-1">
                 <h1 className="titulo truncate text-lg leading-tight">Inventario La Casita</h1>
-                <p className="etiqueta truncate">
-                  {estado?.actualizado ? `Actualizado a las ${estado.actualizado}` : 'Juntando información…'}
-                </p>
+                <p className="etiqueta truncate">{textoActualizado(estado, refrescando)}</p>
               </div>
               <button
                 type="button"
@@ -102,7 +118,10 @@ export function App() {
                 className="boton-suave h-10 w-10 !px-0"
                 aria-label="Actualizar"
               >
-                <Icono nombre="refresh" className={`text-[20px] ${refrescando ? 'animate-spin' : ''}`} />
+                <Icono
+                  nombre="refresh"
+                  className={`text-[20px] ${refrescando || estado?.calculando ? 'animate-spin' : ''}`}
+                />
               </button>
               <button type="button" onClick={salir} className="boton-suave h-10 w-10 !px-0" aria-label="Salir">
                 <Icono nombre="logout" className="text-[20px]" />
