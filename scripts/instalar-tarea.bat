@@ -2,23 +2,25 @@
 rem ============================================================================
 rem  instalar-tarea.bat  -  Da de alta la tarea "LacasitaInvetory".
 rem
-rem  USO:   scripts\instalar-tarea.bat LaContrasenia
-rem         scripts\instalar-tarea.bat LaContrasenia OTROUSUARIO
+rem  USO:   scripts\instalar-tarea.bat
+rem         scripts\instalar-tarea.bat OTROUSUARIO
 rem
-rem  Si la contrasenia trae espacios, ponla entre comillas.
+rem  El usuario por omision es LACASITA. La contrasenia NO se teclea aqui: la
+rem  pide schtasks solito y no se ve mientras se escribe.
 rem
 rem  CUIDADOS:
-rem   - La contrasenia NUNCA se escribe en un archivo ni en un log. Solo pasa
-rem     directo a schtasks. El archivo temporal que se arma aqui solo lleva la
-rem     ruta del repo y el usuario, y se borra al final pase lo que pase.
-rem   - A proposito NO se usa "enabledelayedexpansion": con eso encendido, una
-rem     contrasenia que tenga el signo "!" se rompe.
-rem   - Al terminar, cierra esta ventana: lo que escribiste queda en el
-rem     historial de la consola.
+rem   - La contrasenia NUNCA pasa por la linea de comandos. Se le da a schtasks
+rem     con /rp * para que la pida el: si se pusiera en la linea de comandos,
+rem     cualquier programa de esa computadora la podria leer con
+rem     "wmic process get commandline" mientras schtasks trabaja, y ademas
+rem     quedaria en el historial de la consola.
+rem   - Tampoco se escribe en ningun archivo ni log. El archivo temporal que se
+rem     arma aqui solo lleva la ruta del repo y el usuario, y se borra al final
+rem     pase lo que pase.
 rem ============================================================================
 setlocal
 
-if "%~1"=="" goto :uso
+if "%~1"=="/?" goto :uso
 
 rem --- Raiz del repo, sin rutas quemadas --------------------------------------
 for %%I in ("%~dp0..") do set "RAIZ=%%~fI"
@@ -26,7 +28,7 @@ for %%I in ("%~dp0..") do set "RAIZ=%%~fI"
 set "TAREA=LacasitaInvetory"
 set "PLANTILLA=%~dp0tarea-vigilante.xml"
 set "VIGILANTE=%RAIZ%\scripts\vigilante.vbs"
-set "USUARIO=%~2"
+set "USUARIO=%~1"
 if not defined USUARIO set "USUARIO=LACASITA"
 
 if not exist "%PLANTILLA%" goto :sin_plantilla
@@ -50,7 +52,12 @@ for %%A in ("%TMPXML%") do if %%~zA LSS 200 goto :error_xml
 
 rem --- Alta de la tarea --------------------------------------------------------
 rem /ru y /rp mandan sobre lo que trae el XML. /f reemplaza la tarea si ya existe.
-schtasks /create /tn "%TAREA%" /xml "%TMPXML%" /ru "%USUARIO%" /rp "%~1" /f
+rem Con /rp * schtasks pide la contrasenia el mismo y NO la muestra al teclearla:
+rem asi no queda en la linea de comandos de ningun proceso ni en el historial.
+echo Ahora schtasks va a pedir la contrasenia de Windows de "%USUARIO%".
+echo No se ve mientras la escribes. Teclea y presiona Enter.
+echo.
+schtasks /create /tn "%TAREA%" /xml "%TMPXML%" /ru "%USUARIO%" /rp * /f
 set "RESULTADO=%ERRORLEVEL%"
 
 rem El temporal se borra siempre, haya salido bien o mal.
@@ -72,8 +79,6 @@ echo Listo. Revisa en un minuto:
 echo   %RAIZ%\logs\vigilante.log     (que esta haciendo el vigilante)
 echo   %RAIZ%\logs\consola.log       (la app)
 echo   %RAIZ%\logs\cloudflared.log   (ahi sale la direccion del tunel)
-echo.
-echo Cierra esta ventana para no dejar la contrasenia en el historial.
 goto :fin
 
 rem ============================================================================
@@ -82,12 +87,10 @@ rem ============================================================================
 
 :uso
 echo.
-echo Falta la contrasenia del usuario de Windows.
+echo   Uso:  scripts\instalar-tarea.bat [USUARIO]
 echo.
-echo   Uso:  scripts\instalar-tarea.bat LaContrasenia [USUARIO]
-echo.
-echo El usuario por omision es LACASITA. Si la contrasenia trae espacios,
-echo ponla entre comillas.
+echo El usuario por omision es LACASITA. La contrasenia se pide sola y no se ve
+echo al teclearla: no hay que escribirla aqui.
 goto :fin_error
 
 :sin_plantilla

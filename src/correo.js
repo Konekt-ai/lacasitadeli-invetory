@@ -75,7 +75,13 @@ async function enviarPorResend({ asunto, html, para }) {
 
     if (!respuesta.ok) {
       const detalle = datos?.message || datos?.error?.message || cuerpo || `HTTP ${respuesta.status}`;
-      throw new Error(`Resend respondió ${respuesta.status}: ${detalle}`);
+      const fallo = new Error(`Resend respondió ${respuesta.status}: ${detalle}`);
+      // 401/403 = llave mala, 422 = remitente o destino inválido: reintentar no
+      // sirve, hay que arreglar el .env. Los 408 y 429 sí se reintentan (tiempo
+      // agotado y "vas muy rápido"), igual que cualquier error 500 de Resend.
+      fallo.permanente = respuesta.status >= 400 && respuesta.status < 500
+        && respuesta.status !== 408 && respuesta.status !== 429;
+      throw fallo;
     }
     if (datos?.error) throw new Error(`Resend rechazó el correo: ${datos.error.message ?? 'sin detalle'}`);
 
@@ -112,6 +118,12 @@ async function enviarPorGmail({ asunto, html, para }) {
     });
 
     return info?.messageId ?? '';
+  } catch (error) {
+    // EAUTH / 535 = usuario o contraseña de aplicación incorrectos. Eso no se
+    // arregla solo: reintentar cada minuto nada más golpea el SMTP de Gmail y
+    // llena el log. Hay que corregir EMAIL_USER / EMAIL_PASS en el .env.
+    if (error?.code === 'EAUTH' || error?.responseCode === 535) error.permanente = true;
+    throw error;
   } finally {
     // Que no quede la conexión SMTP abierta hasta que el sistema la tire.
     try { transporte.close(); } catch { /* ya estaba cerrada */ }
@@ -123,8 +135,8 @@ async function enviarPorGmail({ asunto, html, para }) {
  *
  * @param {{ asunto: string, html: string, para?: string }} opciones
  * @returns {Promise<{ enviado: boolean, via?: string, id?: string, motivo?: string, reintentable?: boolean }>}
- *   reintentable dice si vale la pena volver a intentar (falla de red sí, falta de
- *   credenciales no).
+ *   reintentable dice si vale la pena volver a intentar (falla de red sí; falta de
+ *   credenciales, llave mala, remitente no verificado o contraseña equivocada, no).
  */
 export async function enviarCorreo({ asunto, html, para } = {}) {
   const destino = (para || config.correo.destino || '').trim();
@@ -158,6 +170,10 @@ export async function enviarCorreo({ asunto, html, para } = {}) {
   } catch (error) {
     const motivo = sinSecretos(error?.message || error);
     registrar(`No se pudo enviar por ${medio}: ${motivo}`);
-    return { enviado: false, via: medio, motivo, reintentable: true };
+    // Las fallas que nunca se van a arreglar solas (llave mala, remitente no
+    // verificado, contraseña de aplicación equivocada) se marcan como NO
+    // reintentables: si no, la caja se queda golpeando el correo día y noche.
+    if (error?.permanente) registrar('Eso no se arregla reintentando: revisa el correo en el .env de la caja.');
+    return { enviado: false, via: medio, motivo, reintentable: !error?.permanente };
   }
 }

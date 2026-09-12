@@ -131,6 +131,8 @@ export function revisarConfig(c = config) {
   if (c.sesion.secreto.length < 24) problemas.push('SESSION_SECRET debe tener al menos 24 caracteres.');
   if (!c.sql.password) problemas.push('MSSQL_PASSWORD está vacío.');
   if (c.sql.user.toLowerCase() === 'sa') problemas.push('MSSQL_USER es "sa": usa el login de solo lectura inventory_ro.');
-  if (c.host !== '127.0.0.1' && c.host !== 'localhost') problemas.push(`HOST=${c.host}: la app debe escuchar solo en 127.0.0.1.`);
+  // "localhost" tampoco vale: en Windows se va a IPv6 (::1) y los scripts de la
+  // caja, que buscan 127.0.0.1:PUERTO con netstat, no verían la app arriba.
+  if (c.host !== '127.0.0.1') problemas.push(`HOST=${c.host}: la app debe escuchar solo en 127.0.0.1 (ni "localhost" ni "::1").`);
   return problemas;
 }

@@ -53,11 +53,11 @@ set "TOPE_ARRANQUE=1048576"
 
 rem El puerto sale del .env de la caja (PUERTO), el MISMO archivo que lee
 rem src/config.js: si aqui quedara quemado y alguien cambiara el .env, este
-rem script buscaria la app en un puerto y la app estaria en otro. El for de
-rem adentro es para quitarle los espacios sobrantes al valor.
+rem script buscaria la app en un puerto y la app estaria en otro. Los dos for de
+rem adentro son para quitarle los espacios sobrantes al nombre y al valor.
 rem Si el .env no dice nada, se usa el mismo valor por omision que src/config.js.
 rem El orden es el mismo de dotenv: lo que ya trae el ambiente, luego el .env.
-if not defined PUERTO if exist "%RAIZ%\.env" for /f "usebackq eol=# tokens=1,* delims==" %%K in ("%RAIZ%\.env") do if /i "%%K"=="PUERTO" for /f "tokens=1" %%V in ("%%L") do set "PUERTO=%%V"
+if not defined PUERTO if exist "%RAIZ%\.env" for /f "usebackq eol=# tokens=1,* delims==" %%K in ("%RAIZ%\.env") do for /f "tokens=1" %%N in ("%%K") do if /i "%%N"=="PUERTO" for /f "tokens=1" %%V in ("%%L") do set "PUERTO=%%V"
 if not defined PUERTO set "PUERTO=3010"
 
 if not exist "%CARPETA_LOGS%" mkdir "%CARPETA_LOGS%" >nul 2>&1

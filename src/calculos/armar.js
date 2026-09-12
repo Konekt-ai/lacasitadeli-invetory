@@ -20,8 +20,10 @@ const num = v => (Number.isFinite(Number(v)) ? Number(v) : 0);
  * "Celery seed Morton $ bassett". Esta app no muestra dinero ni de casualidad.
  */
 export const limpiarNombre = s => (s ?? '').toString()
+  // Primero la frase completa ("POR $40 PESOS"), si no queda la palabra suelta.
+  .replace(/\$?\s*\d+(?:[.,]\d+)?\s*pesos\b/gi, ' ')
   .replace(/\$\s*\d+(?:[.,]\d+)?/g, ' ')
-  .replace(/\b\d+(?:[.,]\d+)?\s*pesos\b/gi, ' ')
+  .replace(/\bpesos\b/gi, ' ')
   .replace(/\$/g, ' ')
   .replace(/\s+/g, ' ')
   .trim();

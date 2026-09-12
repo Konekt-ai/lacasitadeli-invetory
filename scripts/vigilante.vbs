@@ -201,8 +201,17 @@ Sub ArrancarTunel()
     ' mientras hay uno corriendo el archivo esta abierto y no se deja mover.
     RotarSiPasa ARCH_TUNEL, TOPE_LOG_TUNEL, ARCH_TUNEL_VIEJO
 
+    ' --protocol http2 NO es capricho (probado el 2026-09-11): en una red que
+    ' bloquea UDP 7844, cloudflared avisa "Environment ready with degraded
+    ' transport ... proceed using http2" pero de todos modos se queda reintentando
+    ' QUIC ("Failed to dial a quic connection") con esperas cada vez mas largas, y
+    ' el tunel NUNCA conecta: la pagina contesta 530 desde internet. HTTP/2 pasa por
+    ' los mismos firewalls que cualquier HTTPS y para un celular consultando
+    ' inventario da exactamente igual. Se puede cambiar con TUNEL_PROTOCOLO en el
+    ' .env (por ejemplo "auto" o "quic") si algun dia conviene.
     comando = """" & exe & """ tunnel --url http://127.0.0.1:" & PUERTO_APP & _
               " --metrics 127.0.0.1:" & PUERTO_METRICAS & _
+              " --protocol " & ProtocoloTunel() & _
               " --logfile """ & ARCH_TUNEL & """ --no-autoupdate"
 
     pid = LanzarDesprendido(comando, RAIZ)
@@ -595,6 +604,17 @@ Function NumeroEnv(llave, porOmision)
     NumeroEnv = porOmision
     t = TextoEnv(llave)
     If IsNumeric(t) And t <> "" Then NumeroEnv = CLng(t)
+End Function
+
+' Protocolo del tunel. Por omision http2 (ver la nota en ArrancarTunel).
+Function ProtocoloTunel()
+    Dim t
+    t = LCase(Trim(TextoEnv("TUNEL_PROTOCOLO")))
+    If t = "quic" Or t = "auto" Or t = "http2" Then
+        ProtocoloTunel = t
+    Else
+        ProtocoloTunel = "http2"
+    End If
 End Function
 
 ' En el .env las metricas van como direccion completa (http://127.0.0.1:3011).
