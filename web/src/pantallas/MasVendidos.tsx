@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { api, type Estado } from '../api';
-import { Aviso, Cargando, Foto, Opciones, Vacio, numero, usarNavegacion } from '../componentes/basicos';
+import { Aviso, Cargando, Foto, Icono, Opciones, Vacio, numero, usarNavegacion } from '../componentes/basicos';
 import { usarDatos } from '../componentes/usarDatos';
 
 export function MasVendidos({ estado }: { estado: Estado | null }) {
@@ -15,7 +15,11 @@ export function MasVendidos({ estado }: { estado: Estado | null }) {
 
   return (
     <div className="space-y-4">
-      <Opciones valor={dias} alElegir={setDias} opciones={[{ valor: 7, texto: 'Últimos 7 días' }, { valor: 30, texto: 'Últimos 30 días' }]} />
+      <Opciones
+        valor={dias}
+        alElegir={setDias}
+        opciones={[{ valor: 7, texto: 'Últimos 7 días' }, { valor: 30, texto: 'Últimos 30 días' }, { valor: 90, texto: 'Últimos 90 días' }]}
+      />
       <div className="-mx-4 px-4">
         <Opciones
           valor={area}
@@ -55,6 +59,14 @@ export function MasVendidos({ estado }: { estado: Estado | null }) {
                     {p.codigo}
                     {p.piezasEnTienda !== null && ` · quedan ${numero(p.piezasEnTienda)}`}
                   </span>
+                  {/* "quedan 0" en algo que se vende a diario casi siempre es falso:
+                      el anaquel se surtió sin registrarlo en la TC52. */}
+                  {p.desfase > 0 && (
+                    <span className="mt-0.5 flex items-center gap-1 text-xs font-medium text-error">
+                      <Icono nombre="warning" className="text-[14px]" />
+                      Desfasado{p.desfaseEn && ` en ${p.desfaseEn}`}: {numero(p.desfase)} vendidas en 0
+                    </span>
+                  )}
                 </span>
                 <span className="shrink-0 text-right">
                   <strong className="block text-lg leading-none">{numero(p.piezas)}</strong>

@@ -80,6 +80,15 @@ export function Resurtir({ estado }: { estado: Estado | null }) {
             palomear={palomear}
           />
           <Grupo
+            titulo="Desfasado: cuéntalo"
+            detalle="El sistema dice 0 pero se sigue vendiendo. No lo pidas: cuéntalo con la TC52"
+            tono="error"
+            filas={datos.desfasados}
+            deEsos={datos.cuentas.desfasados}
+            palomeados={palomeados}
+            palomear={palomear}
+          />
+          <Grupo
             titulo="Bajo"
             detalle="Alcanza para menos de una semana"
             tono="aviso"
@@ -97,7 +106,7 @@ export function Resurtir({ estado }: { estado: Estado | null }) {
             palomeados={palomeados}
             palomear={palomear}
           />
-          {!datos.urgentes.length && !datos.bajos.length && !datos.sinConteo.length && (
+          {!datos.urgentes.length && !datos.desfasados.length && !datos.bajos.length && !datos.sinConteo.length && (
             <Vacio icono="local_shipping" titulo="Nada urgente por ahora" detalle="El anaquel está surtido según las ventas de los últimos días." />
           )}
         </>
@@ -183,7 +192,7 @@ function Fila({ f, palomeado, palomear }: { f: FilaResurtido; palomeado: boolean
             {' '}
             {f.piezasArea === null
               ? <span className="text-on-surface">sin contar</span>
-              : <>quedan <strong className="text-on-surface">{numero(f.piezasArea)}</strong></>}
+              : <>{f.estado === 'desfasado' ? 'el sistema dice' : 'quedan'} <strong className="text-on-surface">{numero(f.piezasArea)}</strong></>}
             {f.coberturaDias !== null && f.piezasArea !== null && <> · para {f.coberturaDias} días</>}
           </p>
 

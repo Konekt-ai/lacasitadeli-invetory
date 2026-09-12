@@ -2,14 +2,18 @@
 // Aquí NO se decide nada: las reglas viven en src/calculos/.
 import { consultar } from '../db/mssql.js';
 import { log } from '../log.js';
-import { consultaCatalogoSuelto, loteHistorial, loteRapido } from './consultas.js';
+import { consultaCatalogoSuelto, consultaDesfases, loteHistorial, loteRapido } from './consultas.js';
 
-/** Lote rápido: stock, apartados, áreas, mapa de cajas y ventas por área. */
+let avisoSinPermisoDesfases = false;
+
+/** Lote rápido: stock, apartados, áreas, mapa de cajas, ventas por área y desfases. */
 export async function traerRapido(opciones = {}) {
   const { recordsets, ms } = await consultar(loteRapido(opciones));
   const [areas, mapaCajas, inventario, reservas, equivalencias, ventasArea, reloj] = recordsets;
+  const desfases = await traerDesfases(opciones);
   log.info('datos', `lote rápido ${ms} ms`, {
     inventario: inventario?.length ?? 0, ventasArea: ventasArea?.length ?? 0,
+    desfases: desfases?.length ?? 'sin datos',
   });
   return {
     ms,
@@ -20,7 +24,26 @@ export async function traerRapido(opciones = {}) {
     reservas: reservas ?? [],
     equivalencias: equivalencias ?? [],
     ventasArea: ventasArea ?? [],
+    desfases: desfases ?? [],
   };
+}
+
+/**
+ * Ventas registradas con existencia en 0. Si falla (p. ej. a inventory_ro le falta
+ * el GRANT sobre movimientos_bodega) la app sigue funcionando, solo sin el aviso.
+ */
+async function traerDesfases({ desfaseDias = 90 } = {}) {
+  try {
+    const { recordsets } = await consultar(consultaDesfases({ dias: desfaseDias }));
+    avisoSinPermisoDesfases = false;
+    return recordsets[0] ?? [];
+  } catch (e) {
+    if (!avisoSinPermisoDesfases) {
+      log.aviso('datos', 'no se pudieron leer los desfases (¿falta el GRANT sobre movimientos_bodega?)', e);
+      avisoSinPermisoDesfases = true;
+    }
+    return null;
+  }
 }
 
 /**
@@ -30,12 +53,14 @@ export async function traerRapido(opciones = {}) {
  */
 export async function traerHistorial({ completo = false, duplicadosDias = 120 } = {}) {
   const { recordsets, ms } = await consultar(loteHistorial({ completo, duplicadosDias }));
-  const [historial, catalogo, tiempos] = recordsets;
+  const [historial, catalogo, tiempos, ventas90] = recordsets;
   log.info('datos', `lote historial ${ms} ms${completo ? ' (completo)' : ''}`, {
     codigos: historial?.length ?? 0, catalogo: catalogo?.length ?? 0,
     pasos: (tiempos ?? []).map(t => `${t.paso}:${t.ms}`).join(' '),
   });
-  return { ms, historial: historial ?? [], catalogo: catalogo ?? [], tiempos: tiempos ?? [] };
+  return {
+    ms, historial: historial ?? [], catalogo: catalogo ?? [], tiempos: tiempos ?? [], ventas90: ventas90 ?? [],
+  };
 }
 
 /** Catálogo de unos pocos códigos nuevos (los que aparecieron entre refrescos). */

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { calcularResurtido, ordenarResurtido } from '../src/calculos/resurtido.js';
 import { esCocina } from '../src/calculos/cocina.js';
-import { COCINA } from './datos-de-prueba.js';
+import { AHORA, COCINA } from './datos-de-prueba.js';
 
 const opciones = { ventanaDias: 14, urgenteDias: 2, bajaDias: 7, diasSugeridos: 7 };
 const calcular = (e, o = {}) => calcularResurtido(e, { ...opciones, ...o });
@@ -104,6 +104,26 @@ describe('calcularResurtido', () => {
   it('bien surtido = sin acción', () => {
     const r = calcular({ codigo: 'x', area: 'Casita 1', vendidasVentana: 14, stock: 50 });
     expect(r.accion.tipo).toBe('ninguna');
+  });
+
+  it('desfasado: el 0 es falso, hay que contarlo en vez de pedirlo (GHIRARDELLI)', () => {
+    const r = calcular({
+      codigo: '747599409943', area: 'Casita 1', vendidasVentana: 84, stock: 0,
+      desfase: { piezas: 252, desde: new Date(Date.UTC(2026, 7, 2, 12, 19)) },
+      respaldos: [{ area: 'Bodega', stock: null }],
+    }, { ahora: AHORA });
+    expect(r.estado).toBe('desfasado');
+    expect(r.accion.tipo).toBe('contar');
+    expect(r.accion.texto).toBe('Cuéntalo con la TC52: el sistema dice 0 y se sigue vendiendo');
+    expect(r.accion.nota).toBe('Se vendieron 252 sin existencia en Casita 1 desde el 2 ago');
+    // Con un 0 falso no hay cobertura ni "faltan N" que valga.
+    expect(r.sugerido).toBe(0);
+    expect(r.coberturaDias).toBeNull();
+  });
+
+  it('un desfase viejo de algo que ya no se vende no lo mete a la lista', () => {
+    const r = calcular({ codigo: 'x', area: 'Casita 1', vendidasVentana: 0, stock: 0, desfase: { piezas: 4, desde: null } });
+    expect(r.estado).toBe('ok');
   });
 
   it('primero lo urgente y lo que más se vende', () => {

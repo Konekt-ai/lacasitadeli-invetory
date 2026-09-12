@@ -80,6 +80,7 @@ export function Producto({ codigo }: { codigo: string }) {
             </button>
           </div>
         )}
+        {p.desfase && <div className="mt-3"><Aviso texto={`Inventario desfasado. ${p.desfase.texto}`} /></div>}
         {!p.alta && <div className="mt-3"><Aviso tono="aviso" texto="Este código no está dado de alta en la caja: no se puede cobrar bien y por eso nunca aparece vendido." /></div>}
       </div>
 
@@ -96,6 +97,11 @@ export function Producto({ codigo }: { codigo: string }) {
                     ? <>{a.entradaTexto ? `Última entrada: ${a.entradaTexto}` : 'Contado con la TC52'}{a.apartadas > 0 && ` · ${numero(a.apartadas)} apartadas`}</>
                     : 'Nunca se ha contado aquí'}
                 </p>
+                {a.desfase > 0 && (
+                  <p className="text-xs font-medium text-error">
+                    Desfasado: {numero(a.desfase)} vendidas con 0 en sistema{a.desfaseDesde && ` desde el ${a.desfaseDesde}`}
+                  </p>
+                )}
               </div>
               <span className="shrink-0 text-right">
                 {a.contado

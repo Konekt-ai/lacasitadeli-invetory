@@ -21,6 +21,8 @@
 //   catálogo por Art_Codigo ........... 2.0 s
 //   catálogo por CodAlt / GTIN / PLU ... 2.0 s + 1.9 s + 0.2 s (resuelven 4 códigos)
 //   ventas por área de 30 días ........ 0.16 s
+//   ventas por área de 90 días ........ 0.53 s  (medido 2026-09-12; por eso va cada 30 min)
+//   ventas con existencia en 0 ........ 0.2 s   (movimientos_bodega, ~93 mil filas)
 
 /** Lote rápido (cada 5 min): lo que cambia a cada rato. */
 export const LOTE_RAPIDO = `
@@ -87,7 +89,8 @@ SELECT GETDATE() AS ahora;
  *    última venta solo puede ir hacia adelante: lo de la ventana se mezcla encima
  *    de lo que ya está en memoria y las ventas viejas no cambian nunca.
  *
- * Devuelve: 0) historial por código  1) catálogo resuelto  2) tiempos por paso.
+ * Devuelve: 0) historial por código  1) catálogo resuelto  2) tiempos por paso
+ *          3) ventas por área de 90 días.
  * @param {{completo?: boolean, duplicadosDias?: number}} [opciones]
  */
 export function loteHistorial({ completo = false, duplicadosDias = 120 } = {}) {
@@ -146,6 +149,25 @@ GROUP BY c.codigo
 OPTION (MAXDOP 1);
 INSERT INTO #ms VALUES ('catalogo-base', DATEDIFF(ms,@t,SYSDATETIME()));
 ${fases}
+-- "Más vendidos" de 90 días, por área (caja del ticket -> área, join de 4 llaves).
+-- Cuesta 0.53 s contra 0.16 s la de 30 días: por eso vive aquí (cada 30 min) y no
+-- en el lote rápido (cada 5 min). Para un acumulado de 90 días, media hora de
+-- retraso no cambia nada.
+CREATE TABLE #v90 (area nvarchar(50) COLLATE DATABASE_DEFAULT,
+                   codigo nvarchar(64) COLLATE DATABASE_DEFAULT, v90 decimal(18,3));
+SET @t = SYSDATETIME();
+INSERT INTO #v90 (area, codigo, v90)
+SELECT m.area, ps.Codigo, SUM(ps.Cantidad)
+FROM dbo.TicketsPS ps WITH (NOLOCK)
+JOIN dbo.Tickets t WITH (NOLOCK)
+  ON ps.FolTda_Codigo = t.FolTda_Codigo AND ps.FolEst_Codigo = t.FolEst_Codigo
+ AND ps.FolDoc_Codigo = t.FolDoc_Codigo AND ps.FolConsecutivo = t.FolConsecutivo
+JOIN dbo.estacion_area_map m WITH (NOLOCK) ON m.est_codigo = t.FolEst_Codigo
+WHERE t.T_Fecha >= DATEADD(day,-90,GETDATE())
+  AND ps.Codigo IS NOT NULL AND ps.Codigo <> ''
+GROUP BY m.area, ps.Codigo
+OPTION (MAXDOP 1);
+INSERT INTO #ms VALUES ('ventas-90-dias', DATEDIFF(ms,@t,SYSDATETIME()));
 INSERT INTO #ms VALUES ('TOTAL', DATEDIFF(ms,@t0,SYSDATETIME()));
 
 -- 0) historial completo por código
@@ -154,6 +176,8 @@ SELECT codigo, ultima, v120 FROM #uv;
 SELECT codigo, art_codigo, via, descripcion, categoria, marca FROM #res;
 -- 2) tiempos
 SELECT paso, ms FROM #ms;
+-- 3) ventas por área de 90 días
+SELECT area, codigo, v90 FROM #v90;
 `;
 }
 
@@ -218,6 +242,53 @@ OUTER APPLY (
 OPTION (MAXDOP 1);
 `;
   return { sql, parametros };
+}
+
+/**
+ * Inventario DESFASADO: ventas que el sistema de bodega descontó cuando esa área
+ * ya estaba en 0.
+ *
+ * Cómo nace (medido 2026-09-12): el sistema de bodega descuenta cada venta del área
+ * de su caja (ventas-sync del admin, cada 90 s) y nunca baja de 0. Si el anaquel se
+ * surte sin registrarlo en la TC52, el sistema llega a 0 y se queda ahí mientras el
+ * producto se sigue vendiendo. GHIRARDELLI CARAMEL SQUARE entró 50 el 21-jul, nadie
+ * volvió a registrar entradas y desde el 2-ago se vendieron 252 "en cero": la app
+ * decía "quedan 0" y "pedir al proveedor" con el anaquel lleno.
+ *
+ * Cada venta deja en movimientos_bodega su `stock_antes`; lo vendido por encima de
+ * ese número se vendió sin existencia. Solo cuenta lo que pasó DESPUÉS del último
+ * arreglo en esa área (entrada, ajuste o traslado registrado, o la ultima_entrada de
+ * inventario_bodega, que también mueve la recepción de mercancía): si ya lo
+ * contaron, deja de estar desfasado.
+ *
+ * No hay índice por fecha (solo el id): son dos escaneos de ~93 mil filas, 0.2 s.
+ * Va aparte del lote rápido para que, si faltara el permiso, no tumbe lo demás.
+ * @param {{dias?: number}} [opciones]
+ */
+export function consultaDesfases({ dias = 90 } = {}) {
+  const d = Math.max(1, Number(dias) || 90);
+  return `
+SET NOCOUNT ON;
+SELECT v.codigo_barras AS codigo, v.ubicacion AS area,
+       SUM(v.cantidad - CASE WHEN v.stock_antes > 0 THEN v.stock_antes ELSE 0 END) AS piezas,
+       MIN(v.fecha) AS desde, MAX(v.fecha) AS ultima
+FROM dbo.movimientos_bodega v WITH (NOLOCK)
+LEFT JOIN (
+  SELECT codigo_barras, ubicacion, MAX(fecha) AS fecha
+  FROM dbo.movimientos_bodega WITH (NOLOCK)
+  WHERE tipo IN ('entrada', 'ajuste', 'traslado') AND fecha >= DATEADD(day,-${d},GETDATE())
+  GROUP BY codigo_barras, ubicacion
+) arreglo ON arreglo.codigo_barras = v.codigo_barras AND arreglo.ubicacion = v.ubicacion
+LEFT JOIN dbo.inventario_bodega ib WITH (NOLOCK)
+  ON ib.codigo_barras = v.codigo_barras AND ib.ubicacion = v.ubicacion
+WHERE v.motivo = 'venta'
+  AND v.fecha >= DATEADD(day,-${d},GETDATE())
+  AND v.cantidad > ISNULL(v.stock_antes, 0)
+  AND (arreglo.fecha IS NULL OR v.fecha > arreglo.fecha)
+  AND (ib.ultima_entrada IS NULL OR v.fecha > ib.ultima_entrada)
+GROUP BY v.codigo_barras, v.ubicacion
+OPTION (MAXDOP 1);
+`;
 }
 
 /** Reemplaza los marcadores @VENTANA del lote rápido (no son parámetros de SQL). */

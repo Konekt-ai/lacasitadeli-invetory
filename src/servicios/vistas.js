@@ -32,6 +32,7 @@ export function productoJson(p, { detalle = false } = {}) {
       // el texto con -06:00 y leerle las partes UTC corría un día las entradas de
       // después de las 18:00.
       entradaTexto: a.entradaDate ? fechaCorta(a.entradaDate) : null,
+      desfase: a.desfase ? redondear(a.desfase.piezas) : 0,
     })),
     clase: p.clase,
     etiqueta: ETIQUETAS[p.clase] ?? p.clase,
@@ -40,7 +41,11 @@ export function productoJson(p, { detalle = false } = {}) {
     ventaTexto: p.ultimaVenta ? `Última venta: ${haceCuanto(p.ultimaVenta)}` : 'Nunca se ha vendido',
     ultimaEntrada: p.ultimaEntrada ? naiveAIso(p.ultimaEntrada) : null,
     entradaTexto: p.ultimaEntrada ? `Última entrada: ${fechaCorta(p.ultimaEntrada)}` : null,
-    vendidas: { d7: redondear(p.vendidas.d7), d30: redondear(p.vendidas.d30), d120: redondear(p.vendidas.d120) },
+    vendidas: {
+      d7: redondear(p.vendidas.d7), d30: redondear(p.vendidas.d30),
+      d90: redondear(p.vendidas.d90), d120: redondear(p.vendidas.d120),
+    },
+    desfase: textoDesfase(p.desfase),
     duplicado: p.duplicado
       ? {
         codigo: p.duplicado.codigo,
@@ -60,6 +65,22 @@ export function productoJson(p, { detalle = false } = {}) {
 }
 
 const redondear = v => Math.round((Number(v) || 0) * 100) / 100;
+
+/**
+ * "Inventario desfasado": el sistema dice 0 en un área y ahí se sigue vendiendo.
+ * @param {{piezas: number, desde: Date|null, areas: string[]}|null} d
+ */
+function textoDesfase(d) {
+  if (!d || !(d.piezas > 0)) return null;
+  const donde = d.areas.join(' y ');
+  const desde = d.desde ? ` desde el ${fechaCorta(d.desde)}` : '';
+  return {
+    piezas: redondear(d.piezas),
+    areas: d.areas,
+    desdeTexto: d.desde ? fechaCorta(d.desde) : null,
+    texto: `En ${donde} el sistema dice 0, pero se han vendido ${redondear(d.piezas)} piezas${desde}. Hay que contarlo con la TC52.`,
+  };
+}
 
 /** Encabezado: cuándo se actualizó y qué áreas hay. */
 export function vistaEstado(snap, motor, usuario) {
@@ -199,6 +220,11 @@ export function vistaResurtido(snap, filtros = {}, opciones = {}) {
   const todosUrgentes = porEstado('urgente');
   const todosBajos = porEstado('bajo');
   const todosSinConteo = porEstado('sin_conteo');
+  // Los desfasados van primero los que más se vendieron "en cero": son los que más
+  // engañan (salen arriba en "más vendidos" con "quedan 0").
+  const todosDesfasados = filas.filter(f => f.estado === 'desfasado')
+    .sort((a, b) => (b.desfase?.piezas ?? 0) - (a.desfase?.piezas ?? 0)
+      || b.ventaDiaria - a.ventaDiaria || a.codigo.localeCompare(b.codigo));
 
   return {
     filtros: { area, incluirCocina, incluirSinConteo, buscar },
@@ -206,21 +232,26 @@ export function vistaResurtido(snap, filtros = {}, opciones = {}) {
     // Cuántos hay en total (aunque no vayan todos en esta respuesta).
     cuentas: {
       urgentes: todosUrgentes.length,
+      desfasados: todosDesfasados.length,
       bajos: todosBajos.length,
       sinConteo: todosSinConteo.length,
     },
     tope,
     urgentes: todosUrgentes.slice(0, tope).map(armar),
+    desfasados: todosDesfasados.slice(0, tope).map(armar),
     bajos: todosBajos.slice(0, tope).map(armar),
     sinConteo: todosSinConteo.slice(0, tope).map(armar),
   };
 }
 
-/** Más vendidos por piezas (7 o 30 días), por área. */
+export const DIAS_MAS_VENDIDOS = [7, 30, 90];
+
+/** Más vendidos por piezas (7, 30 o 90 días), por área. */
 export function vistaMasVendidos(snap, filtros = {}) {
-  const { dias = 30, area = '', incluirCocina = false, limite = 50 } = filtros;
-  const ventana = Number(dias) === 7 ? 'v7' : 'v30';
-  const campo = Number(dias) === 7 ? 'd7' : 'd30';
+  const { area = '', incluirCocina = false, limite = 50 } = filtros;
+  const dias = DIAS_MAS_VENDIDOS.includes(Number(filtros.dias)) ? Number(filtros.dias) : 30;
+  const ventana = `v${dias}`;
+  const campo = `d${dias}`;
 
   const filas = [];
   for (const p of snap.productos) {
@@ -241,11 +272,15 @@ export function vistaMasVendidos(snap, filtros = {}) {
       esCocina: p.esCocina,
       piezasEnTienda: area ? (enArea?.cantidad ?? null) : p.piezas,
       area: area || null,
+      // Piezas vendidas con el sistema en 0 (en esa área, o en toda la tienda) y
+      // dónde: en "toda la tienda" el "quedan 10" puede ser de otra área.
+      desfase: redondear(area ? (enArea?.desfase?.piezas ?? 0) : (p.desfase?.piezas ?? 0)),
+      desfaseEn: area ? (enArea?.desfase ? area : null) : (p.desfase?.areas.join(' y ') ?? null),
     });
   }
   filas.sort((a, b) => b.piezas - a.piezas || a.nombre.localeCompare(b.nombre, 'es'));
   return {
-    filtros: { dias: Number(dias) === 7 ? 7 : 30, area, incluirCocina },
+    filtros: { dias, area, incluirCocina },
     areasVenta: snap.areasVenta,
     cuantos: filas.length,
     productos: filas.slice(0, limite),
@@ -296,6 +331,8 @@ export function vistaProducto(snap, codigo) {
       ultimaEntrada: enArea?.ultimaEntrada ? naiveAIso(enArea.ultimaEntrada) : null,
       entradaTexto: enArea?.ultimaEntrada ? fechaCorta(enArea.ultimaEntrada) : null,
       vendidas14: redondear(enArea?.v14 ?? 0),
+      desfase: enArea?.desfase ? redondear(enArea.desfase.piezas) : 0,
+      desfaseDesde: enArea?.desfase?.desde ? fechaCorta(enArea.desfase.desde) : null,
     };
   });
   base.resurtido = snap.resurtido

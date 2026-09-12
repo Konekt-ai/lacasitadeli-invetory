@@ -57,6 +57,10 @@ test.describe('desde el celular', () => {
     await page.getByRole('button', { name: 'Más vendidos' }).click();
     await expect(page.getByText('vendidas').first()).toBeVisible({ timeout: 30_000 });
     await page.screenshot({ path: 'pruebas/capturas/4-mas-vendidos.png' });
+    await page.getByRole('button', { name: 'Últimos 90 días' }).click();
+    await expect(page.getByRole('button', { name: 'Últimos 90 días' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByText('vendidas').first()).toBeVisible({ timeout: 30_000 });
+    await page.screenshot({ path: 'pruebas/capturas/4b-mas-vendidos-90.png' });
 
     await page.getByRole('button', { name: 'Buscar' }).click();
     await page.getByLabel('Buscar producto').fill('coca');

@@ -6,7 +6,7 @@ import {
   asegurarDatos, estadoMotor, hayDatos, marcarUso, obtenerSnapshot,
 } from '../servicios/inventario.js';
 import {
-  vistaBuscar, vistaEstado, vistaMasVendidos, vistaProducto, vistaResurtido, vistaSinVenta,
+  DIAS_MAS_VENDIDOS, vistaBuscar, vistaEstado, vistaMasVendidos, vistaProducto, vistaResurtido, vistaSinVenta,
 } from '../servicios/vistas.js';
 import {
   borrarCookie, exigeSesion, ipDe, ponerCookie, revisarLogin, usuarioDe,
@@ -99,7 +99,7 @@ export function crearRutas() {
 
   r.get('/mas-vendidos', conDatos((req, res, snap) => {
     res.json(vistaMasVendidos(snap, {
-      dias: Number(req.query.dias) === 7 ? 7 : 30,
+      dias: DIAS_MAS_VENDIDOS.includes(Number(req.query.dias)) ? Number(req.query.dias) : 30,
       area: req.query.area ?? '',
       incluirCocina: siNo(req.query.cocina),
       limite: Math.min(Number(req.query.limite) || 50, 200),

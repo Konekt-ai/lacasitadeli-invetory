@@ -4,7 +4,11 @@ export type Area = { nombre: string; color: string };
 export type ProductoArea = {
   area: string; piezas: number | null; apartadas: number;
   ultimaEntrada: string | null; entradaTexto: string | null;
+  desfase: number;  // piezas vendidas ahí con el sistema en 0
 };
+
+/** El sistema dice 0 en un área y ahí se sigue vendiendo: hay que contarlo. */
+export type Desfase = { piezas: number; areas: string[]; desdeTexto: string | null; texto: string };
 
 export type Producto = {
   codigo: string; nombre: string; categoria: string | null; marca: string | null;
@@ -13,11 +17,13 @@ export type Producto = {
   clase: string; etiqueta: string;
   ultimaVenta: string | null; diasSinVenta: number | null; ventaTexto: string;
   ultimaEntrada: string | null; entradaTexto: string | null;
-  vendidas: { d7: number; d30: number; d120: number; d14?: number };
+  vendidas: { d7: number; d30: number; d90: number; d120: number; d14?: number };
+  desfase: Desfase | null;
   duplicado: { codigo: string; nombre: string; piezas: number; texto: string } | null;
   areasTodas?: Array<{
     area: string; color: string; contado: boolean; piezas: number | null;
     apartadas: number; ultimaEntrada: string | null; entradaTexto: string | null; vendidas14: number;
+    desfase: number; desfaseDesde: string | null;
   }>;
   resurtido?: Array<{
     area: string; estado: string; vendeAlDia: number; coberturaDias: number | null;
@@ -105,15 +111,18 @@ export const api = {
 
   resurtido: (f: { area?: string; cocina?: boolean; sinConteo?: boolean; buscar?: string }) =>
     pedir<{
-      cuentas: { urgentes: number; bajos: number; sinConteo: number };
+      cuentas: { urgentes: number; desfasados: number; bajos: number; sinConteo: number };
       areasVenta: string[]; tope: number;
-      urgentes: FilaResurtido[]; bajos: FilaResurtido[]; sinConteo: FilaResurtido[];
+      urgentes: FilaResurtido[]; desfasados: FilaResurtido[]; bajos: FilaResurtido[]; sinConteo: FilaResurtido[];
     }>(`/api/resurtido${q(f)}`),
 
   masVendidos: (f: { dias?: number; area?: string; cocina?: boolean }) =>
     pedir<{
       cuantos: number; areasVenta: string[];
-      productos: Array<{ codigo: string; nombre: string; foto: string | null; piezas: number; clase: string; piezasEnTienda: number | null; esCocina: boolean }>;
+      productos: Array<{
+        codigo: string; nombre: string; foto: string | null; piezas: number; clase: string;
+        piezasEnTienda: number | null; esCocina: boolean; desfase: number; desfaseEn: string | null;
+      }>;
     }>(`/api/mas-vendidos${q(f)}`),
 
   buscar: (texto: string) => pedir<{ q: string; cuantos: number; productos: Producto[] }>(`/api/buscar${q({ q: texto })}`),

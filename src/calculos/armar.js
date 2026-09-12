@@ -51,6 +51,8 @@ export const limpiarCategoria = s => limpiarNombre(s)
  * @param {Array}  [datos.reservas]     [{codigo,ubicacion,apartado}]
  * @param {Array}  datos.historial      [{codigo,ultima,v120,v30,concepto}]
  * @param {Array}  [datos.ventasArea]   [{area,codigo,v7,v14,v30}]
+ * @param {Array}  [datos.ventasArea90] [{area,codigo,v90}]  (lote de cada 30 min)
+ * @param {Array}  [datos.desfases]     [{codigo,area,piezas,desde,ultima}] vendido con existencia en 0
  * @param {Array}  datos.catalogo       [{codigo,art_codigo,descripcion,categoria,marca}]
  * @param {Array}  [datos.equivalencias] [{codigo,codigo_base,unidades}]
  * @param {Map}    [datos.fotos]        código o art_codigo -> url
@@ -92,9 +94,9 @@ export function armarSnapshot(datos, opciones = {}) {
         foto: null, esCocina: false,
         piezas: 0, apartado: 0, areas: [],
         ultimaVenta: null, ultimaEntrada: null, ultimaSalida: null, primeraVez: null,
-        vendidas: { d7: 0, d14: 0, d30: 0, d120: 0 },
+        vendidas: { d7: 0, d14: 0, d30: 0, d90: 0, d120: 0 },
         porArea: new Map(),
-        clase: null, duplicado: null, nombreTC52: null, concepto: null,
+        clase: null, duplicado: null, nombreTC52: null, concepto: null, desfase: null,
       };
       porCodigo.set(c, p);
     }
@@ -169,6 +171,41 @@ export function armarSnapshot(datos, opciones = {}) {
     p.vendidas.d30 += num(v.v30);
   }
 
+  // 4b) Ventas de 90 días por área. Vienen del lote de cada 30 min (la consulta
+  //     cuesta tres veces la de 30 días), así que se suman aparte.
+  for (const v of datos.ventasArea90 ?? []) {
+    const p = traer(v.codigo);
+    if (!p) continue;
+    const area = p.porArea.get(v.area) ?? { area: v.area, cantidad: null, apartado: 0, ultimaEntrada: null, ultimaSalida: null };
+    if (!p.porArea.has(v.area)) p.porArea.set(v.area, area);
+    area.v90 = num(area.v90) + num(v.v90);
+    p.vendidas.d90 += num(v.v90);
+  }
+
+  // 4c) Inventario desfasado: lo que el sistema de bodega descontó cuando esa área
+  //     ya estaba en 0 (ver consultaDesfases). Solo se marca si:
+  //       · HOY sigue en 0: si ya tiene piezas, alguien lo corrigió y el aviso
+  //         confundiría ("quedan 12 · desfasado");
+  //       · y se SIGUE vendiendo en cero (alguna venta así dentro de la ventana de
+  //         venta diaria). Una venta en cero de hace dos meses y nada desde
+  //         entonces es un producto que de verdad se acabó, no un 0 falso.
+  for (const d of datos.desfases ?? []) {
+    const p = porCodigo.get(String(d.codigo ?? '').trim());
+    const enArea = p?.porArea.get(d.area);
+    const piezas = num(d.piezas);
+    if (!enArea || enArea.cantidad === null || enArea.cantidad === undefined) continue;
+    if (enArea.cantidad > 0 || !(piezas > 0)) continue;
+    const desde = d.desde ? new Date(d.desde) : null;
+    const ultima = d.ultima ? new Date(d.ultima) : null;
+    if (!ultima || diasEntre(ultima, ahora) > o.ventanaVentaDiariaDias) continue;
+    enArea.desfase = { piezas, desde, ultima };
+    const total = p.desfase ?? (p.desfase = { piezas: 0, desde: null, ultima: null, areas: [] });
+    total.piezas += piezas;
+    total.areas.push(d.area);
+    if (desde && (!total.desde || desde < total.desde)) total.desde = desde;
+    if (ultima && (!total.ultima || ultima > total.ultima)) total.ultima = ultima;
+  }
+
   // 5) Códigos de caja: lo que se vende con el código de la caja cuenta para el
   //    producto suelto (son 30 filas en la base real, pero explican "nunca vendido"
   //    de algún producto que sí se mueve).
@@ -184,12 +221,13 @@ export function armarSnapshot(datos, opciones = {}) {
     hacia.vendidas.d7 += desde.vendidas.d7 * u;
     hacia.vendidas.d14 += desde.vendidas.d14 * u;
     hacia.vendidas.d30 += desde.vendidas.d30 * u;
+    hacia.vendidas.d90 += desde.vendidas.d90 * u;
     hacia.vendidas.d120 += desde.vendidas.d120 * u;
     // También POR ÁREA: el resurtido solo mira porArea[].v14, así que sin esto un
     // producto que se vende con su código de caja seguía saliendo como si no se
     // vendiera en el anaquel.
     for (const [area, enArea] of desde.porArea) {
-      if (!num(enArea.v7) && !num(enArea.v14) && !num(enArea.v30)) continue;
+      if (!num(enArea.v7) && !num(enArea.v14) && !num(enArea.v30) && !num(enArea.v90)) continue;
       let destino = hacia.porArea.get(area);
       if (!destino) {
         destino = { area, cantidad: null, apartado: 0, ultimaEntrada: null, ultimaSalida: null };
@@ -198,6 +236,7 @@ export function armarSnapshot(datos, opciones = {}) {
       destino.v7 = num(destino.v7) + num(enArea.v7) * u;
       destino.v14 = num(destino.v14) + num(enArea.v14) * u;
       destino.v30 = num(destino.v30) + num(enArea.v30) * u;
+      destino.v90 = num(destino.v90) + num(enArea.v90) * u;
     }
   }
 
@@ -270,6 +309,7 @@ export function armarSnapshot(datos, opciones = {}) {
         entradaDate: a.ultimaEntrada ?? null,
         diasDesdeEntrada: a.ultimaEntrada ? diasEntre(a.ultimaEntrada, ahora) : null,
         v14: num(a.v14),
+        desfase: a.desfase ?? null,
       }))
       .filter(a => a.cantidad !== null && a.cantidad !== undefined)
       .sort((x, y) => {
@@ -297,6 +337,7 @@ export function armarSnapshot(datos, opciones = {}) {
           vendidasVentana: vendidas,
           stock: contado ? enArea.cantidad : null,
           apartado: enArea?.apartado ?? 0,
+          desfase: enArea?.desfase ?? null,
           respaldos: areasRespaldo.map(nombre => {
             const r = p.porArea.get(nombre);
             return { area: nombre, stock: r ? r.cantidad : null, apartado: r?.apartado ?? 0 };
@@ -307,6 +348,7 @@ export function armarSnapshot(datos, opciones = {}) {
           urgenteDias: o.coberturaUrgenteDias,
           bajaDias: o.coberturaBajaDias,
           diasSugeridos: o.diasSugeridos,
+          ahora,
         },
       );
       resurtido.push({
@@ -315,6 +357,7 @@ export function armarSnapshot(datos, opciones = {}) {
         // un código genérico: se esconde por defecto para que la lista sirva.
         nuncaContado: p.nuncaContado,
         vendidas14: vendidas,
+        desfase: enArea?.desfase ?? null,
         ...fila,
       });
     }

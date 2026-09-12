@@ -61,6 +61,14 @@ GRANT SELECT ON dbo.ubicaciones_bodega (nombre, color, activa, orden)        TO 
 GRANT SELECT ON dbo.estacion_area_map  (est_codigo, area)                    TO [inventory_ro];
 GRANT SELECT ON dbo.codigos_producto   (codigo, codigo_base, unidades, tipo) TO [inventory_ro];
 GRANT SELECT ON dbo.reservas_bodega    (codigo_barras, ubicacion, cantidad, activa) TO [inventory_ro];
+
+-- Movimientos de la TC52 y de las ventas: solo para saber qué se vendió con la
+-- existencia en 0 ("inventario desfasado"). Sin `notas` (trae folios de ticket)
+-- ni `area`. Se agregó el 2026-09-12; en una caja ya instalada basta con correr
+-- esta línea sola.
+GRANT SELECT ON dbo.movimientos_bodega
+    (codigo_barras, tipo, cantidad, ubicacion, stock_antes, motivo, fecha)
+    TO [inventory_ro];
 GO
 
 -- Nada más: sin db_datareader, sin EXECUTE, sin permisos de escritura.

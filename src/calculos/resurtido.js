@@ -8,8 +8,14 @@
 // NO es lo mismo que cero. Sin fila no sabemos cuánto hay, así que no se puede
 // decir "urgente": lo que toca es contarlo con la TC52. (Medido: en Casita 1 hay
 // 845 productos que se venden y nunca se contaron ahí — casi todos comida hecha.)
+//
+// Y el caso "desfasado": contado en 0 pero se sigue vendiendo (el sistema descontó
+// ventas cuando ya no había). Ese 0 es falso: pedirlo al proveedor con el anaquel
+// lleno es justo el error. Lo que toca también es contarlo.
 
-export const ESTADOS = ['urgente', 'bajo', 'ok', 'sin_conteo'];
+import { fechaCorta } from './fechas.js';
+
+export const ESTADOS = ['urgente', 'desfasado', 'bajo', 'ok', 'sin_conteo'];
 
 /**
  * @typedef {Object} EntradaResurtido
@@ -18,6 +24,7 @@ export const ESTADOS = ['urgente', 'bajo', 'ok', 'sin_conteo'];
  * @property {number}      vendidasVentana   piezas vendidas ahí en la ventana (14 días)
  * @property {number|null} stock             piezas contadas ahí; null = nunca se contó
  * @property {number}      [apartado]        piezas apartadas por pedidos de la web
+ * @property {{piezas: number, desde: Date|null}|null} [desfase] vendido ahí con existencia en 0
  * @property {Array<{area: string, stock: number|null, apartado?: number}>} [respaldos]
  *
  * @typedef {Object} OpcionesResurtido
@@ -25,6 +32,7 @@ export const ESTADOS = ['urgente', 'bajo', 'ok', 'sin_conteo'];
  * @property {number} urgenteDias        2
  * @property {number} bajaDias           7
  * @property {number} diasSugeridos      7
+ * @property {Date}   [ahora]            para escribir la fecha del desfase
  */
 
 const n = v => (Number.isFinite(Number(v)) ? Number(v) : 0);
@@ -35,13 +43,14 @@ const n = v => (Number.isFinite(Number(v)) ? Number(v) : 0);
  */
 export function calcularResurtido(e, opciones = {}) {
   const {
-    ventanaDias = 14, urgenteDias = 2, bajaDias = 7, diasSugeridos = 7,
+    ventanaDias = 14, urgenteDias = 2, bajaDias = 7, diasSugeridos = 7, ahora,
   } = opciones;
 
   const ventaDiaria = ventanaDias > 0 ? n(e.vendidasVentana) / ventanaDias : 0;
   const seVende = ventaDiaria > 0;
   const contado = e.stock !== null && e.stock !== undefined;
   const disponible = contado ? n(e.stock) - n(e.apartado) : null;
+  const desfasado = seVende && contado && n(e.desfase?.piezas) > 0;
 
   // Respaldo (Bodega): el que más tenga disponible.
   let respaldo = null;
@@ -52,16 +61,18 @@ export function calcularResurtido(e, opciones = {}) {
     else if ((disp ?? -1) > (respaldo.disponible ?? -1)) respaldo = cand;
   }
 
-  const coberturaDias = seVende && contado ? disponible / ventaDiaria : null;
-  // Si NO está contado no se puede sugerir cuánto falta: tratar "sin fila" como
-  // cero es justo lo que este módulo evita. Antes decía "faltan 35" en el mismo
+  // Ni cobertura ni sugerido cuando el número no es de fiar: sin fila no se sabe
+  // cuánto hay, y desfasado el 0 es falso. Antes decía "faltan 35" en el mismo
   // renglón que "no está contado: cuéntalo con la TC52" — dos órdenes contrarias.
-  const sugerido = seVende && contado
+  const confiable = seVende && contado && !desfasado;
+  const coberturaDias = confiable ? disponible / ventaDiaria : null;
+  const sugerido = confiable
     ? Math.max(0, Math.ceil(ventaDiaria * diasSugeridos - Math.max(disponible, 0)))
     : 0;
 
   let estado = 'ok';
   if (!contado) estado = 'sin_conteo';
+  else if (desfasado) estado = 'desfasado';
   else if (seVende && (disponible <= 0 || coberturaDias < urgenteDias)) estado = 'urgente';
   else if (seVende && coberturaDias < bajaDias) estado = 'bajo';
 
@@ -72,11 +83,20 @@ export function calcularResurtido(e, opciones = {}) {
     disponible,
     coberturaDias: coberturaDias === null ? null : Math.round(coberturaDias * 10) / 10,
     sugerido,
-    accion: armarAccion({ estado, sugerido, respaldo, area: e.area }),
+    accion: armarAccion({ estado, sugerido, respaldo, area: e.area, stock: e.stock, desfase: e.desfase, ahora }),
   };
 }
 
-function armarAccion({ estado, sugerido, respaldo, area }) {
+function armarAccion({ estado, sugerido, respaldo, area, stock, desfase, ahora }) {
+  if (estado === 'desfasado') {
+    const desde = desfase?.desde ? fechaCorta(desfase.desde, ahora) : null;
+    return {
+      tipo: 'contar',
+      texto: `Cuéntalo con la TC52: el sistema dice ${n(stock)} y se sigue vendiendo`,
+      nota: `Se vendieron ${n(desfase?.piezas)} sin existencia en ${area}${desde ? ` desde el ${desde}` : ''}`,
+      surtirDeRespaldo: 0,
+    };
+  }
   if (estado === 'sin_conteo') {
     return {
       tipo: 'contar',
@@ -122,7 +142,7 @@ function armarAccion({ estado, sugerido, respaldo, area }) {
 
 /** Orden para la lista: primero lo más urgente y lo que más se vende. */
 export function ordenarResurtido(filas) {
-  const peso = { urgente: 0, bajo: 1, sin_conteo: 2, ok: 3 };
+  const peso = { urgente: 0, desfasado: 1, bajo: 2, sin_conteo: 3, ok: 4 };
   return [...filas].sort((a, b) =>
     (peso[a.estado] - peso[b.estado]) ||
     (b.ventaDiaria - a.ventaDiaria) ||

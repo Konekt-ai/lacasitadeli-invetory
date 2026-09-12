@@ -58,6 +58,26 @@ export const VENTAS_AREA = [
   { area: 'Casita 1', codigo: '00987339', v7: 30, v14: 60, v30: 120 },
 ];
 
+// Del lote de cada 30 min. El té (222…) vendió hace 45 días: sale en 90, no en 30.
+export const VENTAS_AREA_90 = [
+  { area: 'Casita 1', codigo: '333333333333', v90: 420 },
+  { area: 'Casita 2', codigo: '555555555555', v90: 170 },
+  { area: 'Casita 1', codigo: '222222222222', v90: 3 },
+  { area: 'Casita 1', codigo: '0', v90: 12000 },
+];
+
+/**
+ * Ventas registradas con la existencia en 0 (movimientos_bodega), como los
+ * GHIRARDELLI de Casita 1 el 2026-09-12:
+ *  555555555555 Agua en Casita 2: contado en 0 y se sigue vendiendo -> desfasado
+ *  333333333333 Chocolate en Casita 1: tuvo ventas en cero pero HOY tiene 3 piezas
+ *               (ya lo corrigieron) -> NO desfasado
+ */
+export const DESFASES = [
+  { codigo: '555555555555', area: 'Casita 2', piezas: 20, desde: haceDias(9), ultima: haceDias(1) },
+  { codigo: '333333333333', area: 'Casita 1', piezas: 5, desde: haceDias(20), ultima: haceDias(15) },
+];
+
 export const CATALOGO = [
   { codigo: '098733', art_codigo: '098733', descripcion: 'Kinder Joy Stranger Things', categoria: 'ABARROTES', marca: null },
   { codigo: '00987339', art_codigo: '00987339', descripcion: 'KINDER JOY ', categoria: 'ABARROTES', marca: null },
@@ -96,6 +116,8 @@ export function datosCompletos(extra = {}) {
     reservas: RESERVAS,
     historial: HISTORIAL,
     ventasArea: VENTAS_AREA,
+    ventasArea90: VENTAS_AREA_90,
+    desfases: DESFASES,
     catalogo: CATALOGO,
     equivalencias: [],
     fotos: new Map(),

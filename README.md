@@ -147,6 +147,13 @@ scripts\iniciar-app.bat
 `iniciar-app.bat` mata **solo** lo que esté en el puerto 3010 y vuelve a
 levantar la app. El túnel sigue igual, así que **la dirección no cambia**.
 
+> **Cajas instaladas antes del 2026-09-12:** el aviso de *inventario desfasado*
+> lee `movimientos_bodega`, así que `inventory_ro` necesita un permiso más (solo
+> lectura, 7 columnas, sin dinero). Es la última línea `GRANT` de
+> `scripts\crear-login-ro.sql`; se corre una vez con `sa`. Sin ese permiso la app
+> funciona igual, solo que sin el aviso (lo dice en `logs\consola.log`). En la
+> caja de La Casita ya quedó aplicado.
+
 > **NUNCA** corras `actualizar-sistema.bat` del admin por SSH, ni
 > `taskkill /IM node.exe`: tumbarías el punto de venta, el panel y la PWA.
 

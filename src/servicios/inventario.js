@@ -2,8 +2,9 @@
 //
 // Reglas de rendimiento (la base es la del punto de venta):
 //   · NUNCA se calcula por visita: las pantallas leen lo que ya está en memoria.
-//   · Lote rápido (stock, apartados, ventas por área) cada 5 min  ≈ 0.25 s de SQL.
-//   · Lote pesado (última venta de 4.5 años + catálogo) cada 30 min ≈ 5.5 s de SQL;
+//   · Lote rápido (stock, apartados, ventas por área, desfases) cada 5 min ≈ 0.5 s de SQL.
+//   · Lote pesado (última venta de 4.5 años + catálogo + ventas de 90 días) cada
+//     30 min ≈ 6 s de SQL;
 //     al arrancar y cada 6 h se corre "completo" (≈ 9.5 s) con las fases por código
 //     alterno/GTIN/PLU.
 //   · Un solo cálculo a la vez: si ya hay uno corriendo, el que llega se cuelga de
@@ -19,6 +20,7 @@ import { log } from '../log.js';
 const estado = {
   rapido: null,          // datos del lote rápido
   historial: new Map(),  // codigo -> {codigo, ultima, v120, concepto}
+  ventas90: [],          // [{area, codigo, v90}] del lote de cada 30 min
   catalogo: new Map(),   // codigo -> {art_codigo, descripcion, categoria, marca, via}
   faltantes: new Set(),  // códigos que ya buscamos y NO están en NovaCaja
   fotos: new Map(),
@@ -98,6 +100,7 @@ export function refrescarHistorial({ completo = false } = {}) {
   estado.corriendo.historial = (async () => {
     const datos = await traerHistorial({ completo, duplicadosDias: config.umbrales.duplicadosDias });
     mezclarHistorial(datos.historial, completo);
+    estado.ventas90 = datos.ventas90;
     for (const fila of datos.catalogo) {
       if (fila.art_codigo) estado.catalogo.set(String(fila.codigo).trim(), { ...fila, codigo: String(fila.codigo).trim() });
     }
@@ -211,6 +214,8 @@ function recomputar() {
         reservas: estado.rapido.reservas,
         equivalencias: estado.rapido.equivalencias,
         ventasArea: estado.rapido.ventasArea,
+        ventasArea90: estado.ventas90,
+        desfases: estado.rapido.desfases,
         historial: estado.historial.values(),
         catalogo: [...estado.catalogo.values()].map(c => ({ ...c, codigo: c.codigo })),
         fotos: estado.fotos,

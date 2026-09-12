@@ -84,6 +84,9 @@ export const config = {
     diasSugeridos: numero('DIAS_SUGERIDOS', 7),
     ventanaVentaDiariaDias: entero('VENTANA_VENTA_DIARIA_DIAS', 14),
     duplicadosDias: entero('DUPLICADOS_DIAS', 120),
+    // Cuántos días atrás se buscan ventas registradas con existencia en 0. La tabla
+    // no tiene índice por fecha: 90 cuesta lo mismo que 30 y dice bien "desde cuándo".
+    desfaseDias: entero('DESFASE_DIAS', 90),
   },
 
   areas: {

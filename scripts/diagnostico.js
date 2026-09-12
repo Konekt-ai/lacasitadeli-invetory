@@ -37,6 +37,8 @@ const snap = armarSnapshot({
   reservas: rapido.reservas,
   equivalencias: rapido.equivalencias,
   ventasArea: rapido.ventasArea,
+  ventasArea90: historial.ventas90,
+  desfases: rapido.desfases,
   historial: historial.historial,
   catalogo: historial.catalogo,
   fotos,
@@ -81,6 +83,13 @@ for (const p of parados) {
 console.log('\n── Posibles códigos duplicados (top 5) ──────────────────');
 for (const p of snap.productos.filter(x => x.duplicado).sort((a, b) => b.piezas - a.piezas).slice(0, 5)) {
   console.log(`  ${String(n(p.piezas)).padStart(6)} pz  ${p.codigo.padEnd(14)} ${p.nombre.slice(0, 28).padEnd(28)} → ${p.duplicado.codigo} ${p.duplicado.nombre.slice(0, 24)}`);
+}
+
+console.log('\n── Inventario desfasado (el sistema dice 0 y se sigue vendiendo) ──');
+const desfasados = snap.productos.filter(p => p.desfase).sort((a, b) => b.desfase.piezas - a.desfase.piezas);
+console.log(`  ${n(desfasados.length)} productos · ${n(desfasados.reduce((s, p) => s + p.desfase.piezas, 0))} piezas vendidas sin existencia en ${config.umbrales.desfaseDias} días`);
+for (const p of desfasados.slice(0, 10)) {
+  console.log(`  ${String(n(p.desfase.piezas)).padStart(6)} pz  ${p.codigo.padEnd(14)} ${p.nombre.slice(0, 34).padEnd(34)} ${p.desfase.areas.join(', ')}`);
 }
 
 console.log('\n── Privacidad ───────────────────────────────────────────');

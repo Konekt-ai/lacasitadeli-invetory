@@ -49,6 +49,9 @@ Lo que hay que subir al anaquel **hoy**, según lo que se está vendiendo en cad
 caja en los últimos 14 días.
 
 - **Urgente** (rojo): se acabó o alcanza para menos de 2 días.
+- **Desfasado: cuéntalo** (rojo): el sistema dice **0** pero se sigue vendiendo.
+  Ese 0 es falso (ver "Inventario desfasado" abajo): **no lo pidas**, cuéntalo
+  con la TC52.
 - **Bajo** (café): alcanza para menos de una semana.
 - **Se vende pero no está contado**: se vende ahí, pero nadie lo ha contado en esa
   área con la TC52, así que no se sabe cuánto queda.
@@ -58,6 +61,8 @@ Cada renglón dice qué hacer:
 - **"Surte 8 de Bodega (hay 40)"** → hay en Bodega, súbelo.
 - **"Pedir al proveedor"** → no hay en Bodega.
 - **"No está contado en Casita 2: cuéntalo con la TC52"** → primero hay que contarlo.
+- **"Cuéntalo con la TC52: el sistema dice 0 y se sigue vendiendo"** → está
+  desfasado; abajo dice cuántas se vendieron sin existencia y desde cuándo.
 
 **La palomita ✓** es tu lista de pendientes: se guarda **solo en tu celular** (el
 de al lado no la ve) y se borra sola a las 12 horas. Sirve para ir tachando
@@ -70,8 +75,12 @@ esa no se resurte del almacén. Si la quieres ver, prende la casilla.
 
 ## 3. Más vendidos
 
-Los productos que más piezas movieron en 7 o en 30 días, y cuántas quedan en la
-tienda. Se puede ver toda la tienda o solo Casita 1 / Casita 2.
+Los productos que más piezas movieron en los últimos **7, 30 o 90 días**, y
+cuántas quedan en la tienda. Se puede ver toda la tienda o solo Casita 1 /
+Casita 2.
+
+Si abajo del código sale en rojo **"Desfasado en Casita 1: 256 vendidas en 0"**,
+el "quedan" de ese producto no es de fiar: hay que contarlo.
 
 ---
 
@@ -85,6 +94,28 @@ En la ficha, ojo con la diferencia:
 
 - **0 piezas** = se contó y no hay.
 - **"sin contar"** = nadie lo ha contado ahí nunca. No es lo mismo: puede haber.
+- Si arriba sale un aviso rojo de **inventario desfasado**, ese 0 es falso.
+
+---
+
+## Inventario desfasado: por qué el sistema dice 0 si sí hay
+
+Cada venta de la caja se descuenta sola del área de esa caja (Casita 1 o
+Casita 2), y el sistema **nunca baja de 0**. Si se sube producto al anaquel
+**sin registrarlo en la TC52** (entrada o traslado desde Bodega), el sistema
+llega a 0 y ahí se queda, aunque el producto se siga vendiendo todos los días.
+
+Ejemplo real: GHIRARDELLI CARAMEL SQUARE se registró una sola vez (50 piezas el
+21 de julio). Desde el 2 de agosto el sistema dice 0 y se han vendido más de 250
+piezas.
+
+La página lo detecta sola: si en un área **se vendió con el sistema en 0** en
+los últimos 14 días y nadie lo ha vuelto a contar, lo marca como **desfasado**.
+
+**Cómo se arregla:** contar el producto en esa área con la TC52 (o registrar la
+entrada / el traslado cuando se surte). En unos 5 minutos deja de salir como
+desfasado. Y para que no vuelva a pasar: **todo lo que se sube al anaquel se
+registra en la TC52**.
 
 ---
 

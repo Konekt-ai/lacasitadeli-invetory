@@ -20,6 +20,8 @@ const DEBEN_FALLAR = [
   ['SELECT * (trae todo, incluido el dinero)', 'SELECT TOP 1 * FROM dbo.TicketsPS WITH (NOLOCK)'],
   ['escribir en el inventario', 'UPDATE dbo.inventario_bodega SET cantidad = cantidad WHERE 1 = 0'],
   ['borrar ventas', 'DELETE FROM dbo.TicketsPS WHERE 1 = 0'],
+  ['borrar movimientos de la TC52', 'DELETE FROM dbo.movimientos_bodega WHERE 1 = 0'],
+  ['movimientos_bodega.notas (folios de ticket)', 'SELECT TOP 1 notas FROM dbo.movimientos_bodega WITH (NOLOCK)'],
   ['ListaPreciosArt (precios de venta)', 'SELECT TOP 1 LPA_PrecioVenta FROM dbo.ListaPreciosArt WITH (NOLOCK)'],
 ];
 
@@ -32,6 +34,7 @@ const DEBEN_FUNCIONAR = [
   ['mapa de cajas', 'SELECT TOP 1 est_codigo, area FROM dbo.estacion_area_map WITH (NOLOCK)'],
   ['códigos de caja', 'SELECT TOP 1 codigo, codigo_base, unidades, tipo FROM dbo.codigos_producto WITH (NOLOCK)'],
   ['apartados', 'SELECT TOP 1 codigo_barras, ubicacion, cantidad, activa FROM dbo.reservas_bodega WITH (NOLOCK)'],
+  ['movimientos (inventario desfasado)', 'SELECT TOP 1 codigo_barras, tipo, cantidad, ubicacion, stock_antes, motivo, fecha FROM dbo.movimientos_bodega WITH (NOLOCK)'],
   ['tabla temporal', 'CREATE TABLE #prueba (a int); INSERT INTO #prueba VALUES (1); SELECT a FROM #prueba;'],
 ];
 
