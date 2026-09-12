@@ -46,9 +46,11 @@ export function crearApp() {
   });
 
   // ── API ─────────────────────────────────────────────────────────────────
+  // marcarUso() NO va aquí: si contara cualquier toque sin contraseña, un bot
+  // tocando /api mantendría a la app refrescando la base toda la noche. Se marca
+  // dentro de las rutas, ya con sesión revisada.
   app.use('/api', (req, res, siguiente) => {
     res.setHeader('Cache-Control', 'no-store');
-    marcarUso();
     siguiente();
   }, crearRutas());
 

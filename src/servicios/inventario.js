@@ -27,6 +27,10 @@ const estado = {
   desde: {
     rapido: 0, historial: 0, completo: 0, snapshot: 0,
   },
+  // Cuándo falló por última vez cada lote, para no reintentar sin parar mientras
+  // SQL Server no contesta (el lote pesado escanea 4.5 años: hacerlo en cada
+  // visita sería lo peor que se le puede hacer al punto de venta).
+  fallo: { rapido: 0, historial: 0 },
   corriendo: { rapido: null, historial: null },
   ultimoUso: Date.now(),
   temporizadores: [],
@@ -63,17 +67,25 @@ export function estadoMotor() {
 
 // ── Refrescos ──────────────────────────────────────────────────────────────────
 
+/** Minutos de calma después de que un lote falló (para no machacar a la caja). */
+const ESPERA_TRAS_FALLO_MIN = { rapido: 1, historial: 5 };
+const enCalma = lote => estado.fallo[lote] > 0
+  && Date.now() - estado.fallo[lote] < ESPERA_TRAS_FALLO_MIN[lote] * 60_000;
+
 export function refrescarRapido() {
   if (estado.corriendo.rapido) return estado.corriendo.rapido;
+  if (enCalma('rapido')) return Promise.resolve();
   estado.corriendo.rapido = (async () => {
     const datos = await traerRapido(config.umbrales);
     estado.rapido = datos;
     estado.desde.rapido = Date.now();
+    estado.fallo.rapido = 0;
     await completarCatalogoFaltante(datos);
     recomputar();
   })()
     .catch(e => {
       estado.error = 'No se pudo leer el inventario de la caja.';
+      estado.fallo.rapido = Date.now();
       log.error('motor', 'falló el lote rápido', e);
     })
     .finally(() => { estado.corriendo.rapido = null; });
@@ -82,6 +94,7 @@ export function refrescarRapido() {
 
 export function refrescarHistorial({ completo = false } = {}) {
   if (estado.corriendo.historial) return estado.corriendo.historial;
+  if (enCalma('historial')) return Promise.resolve();
   estado.corriendo.historial = (async () => {
     const datos = await traerHistorial({ completo, duplicadosDias: config.umbrales.duplicadosDias });
     mezclarHistorial(datos.historial, completo);
@@ -92,11 +105,13 @@ export function refrescarHistorial({ completo = false } = {}) {
     // dado de alta desde el último refresco.
     estado.faltantes = new Set();
     estado.desde.historial = Date.now();
+    estado.fallo.historial = 0;
     if (completo) estado.desde.completo = Date.now();
     recomputar();
   })()
     .catch(e => {
       estado.error = 'No se pudo leer el historial de ventas.';
+      estado.fallo.historial = Date.now();
       log.error('motor', 'falló el lote de historial', e);
     })
     .finally(() => { estado.corriendo.historial = null; });
@@ -170,9 +185,21 @@ async function completarCatalogoFaltante(datos) {
   }
 }
 
-/** Rearma la foto en memoria con lo último que haya de cada fuente. */
+/**
+ * Rearma la foto en memoria con lo último que haya de cada fuente.
+ *
+ * OJO: hace falta que el lote PESADO haya cargado al menos una vez. Si se armara
+ * solo con el lote rápido, el historial y el catálogo estarían vacíos y la app
+ * enseñaría los 11 mil productos como "sin alta en caja" y "nunca se ha vendido".
+ * Es preferible seguir diciendo "estamos juntando la información" que mostrar algo
+ * que está mal.
+ */
 function recomputar() {
   if (!estado.rapido) return;
+  if (!estado.desde.historial) {
+    log.info('motor', 'todavía no hay historial: no se publica la foto (sería toda "sin alta")');
+    return;
+  }
   const t0 = Date.now();
   try {
     estado.snapshot = armarSnapshot(
@@ -219,9 +246,12 @@ async function refrescarFotos() {
 
 /** Primer cálculo + temporizadores. No truena si la base no contesta. */
 export async function arrancarMotor({ esperarPrimero = false } = {}) {
+  // Primero lo barato (0.3 s) y luego lo caro (9 s): así, en cuanto termina el
+  // historial ya hay stock y la foto se puede armar de una vez. Al revés, el lote
+  // pesado terminaba y recomputar() se salía porque todavía no había stock.
   const primera = (async () => {
-    await refrescarHistorial({ completo: true });
     await refrescarRapido();
+    await refrescarHistorial({ completo: true });
     await refrescarFotos();
   })();
   if (esperarPrimero) await primera; else primera.catch(() => {});
@@ -262,7 +292,8 @@ export function asegurarDatos({ forzar = false } = {}) {
   marcarUso();
   if (!estado.rapido || !estado.desde.historial) {
     // Arranque en frío: que el primer visitante no se quede esperando 10 s.
-    refrescarHistorial({ completo: true }).then(() => refrescarRapido());
+    // (Si acaba de fallar, refrescar* se sale solo: hay una calma entre intentos.)
+    Promise.resolve(refrescarRapido()).then(() => refrescarHistorial({ completo: true }));
     return { calculando: true };
   }
   const stockViejo = viejo(estado.desde.rapido, forzar ? 1 : config.refresco.rapidoMin);

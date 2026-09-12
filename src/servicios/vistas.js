@@ -28,7 +28,10 @@ export function productoJson(p, { detalle = false } = {}) {
       piezas: a.cantidad,
       apartadas: a.apartado || 0,
       ultimaEntrada: a.ultimaEntrada,
-      entradaTexto: a.ultimaEntrada ? fechaCorta(a.ultimaEntrada) : null,
+      // Se usa la fecha CRUDA (entradaDate), no el ISO ya armado: volver a parsear
+      // el texto con -06:00 y leerle las partes UTC corría un día las entradas de
+      // después de las 18:00.
+      entradaTexto: a.entradaDate ? fechaCorta(a.entradaDate) : null,
     })),
     clase: p.clase,
     etiqueta: ETIQUETAS[p.clase] ?? p.clase,
@@ -116,13 +119,20 @@ export function vistaSinVenta(snap, filtros = {}, opciones = {}) {
   if (texto) lista = lista.filter(p => p.nombreNormalizado.includes(texto) || p.codigo.includes(buscar.trim()));
 
   const piezasEnArea = p => (area ? (p.areas.find(a => a.area === area)?.cantidad ?? 0) : p.piezas);
+  // El desempate por código NO es un lujo: hay miles de productos con 1 o 2 piezas
+  // y sin ventas, o sea empatados en los dos criterios. Sin un tercer criterio fijo
+  // el orden acaba siendo el que devolvió SQL (que con NOLOCK cambia entre
+  // refrescos) y, como la lista se pagina, al pedir la página 2 después de un
+  // refresco se repetían productos y otros no salían nunca.
   lista = [...lista].sort((a, b) => {
     if (orden === 'dias') {
       const da = a.diasSinVenta === null ? Number.MAX_SAFE_INTEGER : a.diasSinVenta;
       const db = b.diasSinVenta === null ? Number.MAX_SAFE_INTEGER : b.diasSinVenta;
-      return db - da || piezasEnArea(b) - piezasEnArea(a);
+      return db - da || piezasEnArea(b) - piezasEnArea(a) || a.codigo.localeCompare(b.codigo);
     }
-    return piezasEnArea(b) - piezasEnArea(a) || (b.diasSinVenta ?? 1e9) - (a.diasSinVenta ?? 1e9);
+    return piezasEnArea(b) - piezasEnArea(a)
+      || (b.diasSinVenta ?? 1e9) - (a.diasSinVenta ?? 1e9)
+      || a.codigo.localeCompare(b.codigo);
   });
 
   const cuantos = lista.length;
@@ -143,8 +153,13 @@ export function vistaSinVenta(snap, filtros = {}, opciones = {}) {
  * Lista para surtir el anaquel.
  * @param {{area?: string, incluirCocina?: boolean, incluirSinConteo?: boolean, buscar?: string}} filtros
  */
-export function vistaResurtido(snap, filtros = {}) {
+export function vistaResurtido(snap, filtros = {}, opciones = {}) {
   const { area = '', incluirCocina = false, incluirSinConteo = false, buscar = '' } = filtros;
+  // Tope por grupo: en Casita 1 hay ~550 urgentes. Mandarlos todos son cientos de
+  // kilobytes por el túnel y otras tantas tarjetas en el celular, cuando nadie va a
+  // surtir más de unas decenas de una sentada. Van los más urgentes primero y la
+  // pantalla dice cuántos quedaron fuera.
+  const tope = Math.min(Math.max(Number(opciones.tope) || 150, 1), 1000);
   const texto = normalizar(buscar);
 
   let filas = snap.resurtido;
@@ -180,17 +195,24 @@ export function vistaResurtido(snap, filtros = {}) {
     };
   };
 
-  const urgentes = ordenarResurtido(filas.filter(f => f.estado === 'urgente')).map(armar);
-  const bajos = ordenarResurtido(filas.filter(f => f.estado === 'bajo')).map(armar);
-  const sinConteo = ordenarResurtido(filas.filter(f => f.estado === 'sin_conteo')).map(armar);
+  const porEstado = estado => ordenarResurtido(filas.filter(f => f.estado === estado));
+  const todosUrgentes = porEstado('urgente');
+  const todosBajos = porEstado('bajo');
+  const todosSinConteo = porEstado('sin_conteo');
 
   return {
     filtros: { area, incluirCocina, incluirSinConteo, buscar },
     areasVenta: snap.areasVenta,
-    cuentas: { urgentes: urgentes.length, bajos: bajos.length, sinConteo: sinConteo.length },
-    urgentes,
-    bajos,
-    sinConteo,
+    // Cuántos hay en total (aunque no vayan todos en esta respuesta).
+    cuentas: {
+      urgentes: todosUrgentes.length,
+      bajos: todosBajos.length,
+      sinConteo: todosSinConteo.length,
+    },
+    tope,
+    urgentes: todosUrgentes.slice(0, tope).map(armar),
+    bajos: todosBajos.slice(0, tope).map(armar),
+    sinConteo: todosSinConteo.slice(0, tope).map(armar),
   };
 }
 

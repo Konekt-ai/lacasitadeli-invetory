@@ -164,3 +164,49 @@ describe('vistas', () => {
     expect(AHORA.getUTCHours()).toBe(14);
   });
 });
+
+// ── Regresiones de la revisión adversarial ──────────────────────────────────
+describe('regresiones', () => {
+  it('la fecha de entrada por área no se corre un día si llegó de tarde', () => {
+    // La tienda recibe de tarde: 19:15 hora de la tienda. Antes salía "30 ago".
+    const tarde = new Date(Date.UTC(2026, 7, 29, 19, 15));
+    const s = armarSnapshot(datosCompletos({
+      inventario: [{ codigo: '777', ubicacion: 'Casita 1', cantidad: 5, ultima_entrada: tarde, ultima_salida: null, creado: tarde, nombre: 'PRODUCTO DE TARDE' }],
+    }), OPCIONES);
+    const p = vistaSinVenta(s, { clase: 'todos' }, OPCIONES).productos.find(x => x.codigo === '777');
+    expect(p.areas[0].entradaTexto).toBe('29 ago');
+    expect(p.entradaTexto).toBe('Última entrada: 29 ago');
+  });
+
+  it('las ventas por código de caja también llegan al área (si no, el resurtido no las ve)', () => {
+    const s = armarSnapshot(datosCompletos({
+      inventario: [
+        { codigo: '888', ubicacion: 'Casita 1', cantidad: 2, ultima_entrada: haceDias(3), ultima_salida: null, creado: haceDias(300), nombre: 'PRODUCTO CON CAJA' },
+        { codigo: '888', ubicacion: 'Bodega', cantidad: 60, ultima_entrada: haceDias(3), ultima_salida: null, creado: haceDias(300), nombre: 'PRODUCTO CON CAJA' },
+      ],
+      // Se vende SOLO con el código de la caja, que trae 12 piezas.
+      ventasArea: [{ area: 'Casita 1', codigo: '888CAJA', v7: 2, v14: 4, v30: 8 }],
+      historial: [{ codigo: '888CAJA', ultima: haceDias(1), v120: 30 }],
+      equivalencias: [{ codigo: '888CAJA', codigo_base: '888', unidades: 12 }],
+      catalogo: [{ codigo: '888', art_codigo: '888', descripcion: 'PRODUCTO CON CAJA', categoria: 'ABARROTES', marca: null }],
+    }), OPCIONES);
+    const fila = s.resurtido.find(r => r.codigo === '888' && r.area === 'Casita 1');
+    expect(fila, 'el producto debe entrar al resurtido por lo vendido en cajas').toBeTruthy();
+    expect(fila.vendidas14).toBe(48);          // 4 cajas × 12 piezas
+    expect(fila.estado).toBe('urgente');       // vende 3.4 al día y quedan 2
+  });
+
+  it('el orden de la lista no depende del orden en que venga el inventario', () => {
+    const datos = datosCompletos();
+    const alReves = { ...datos, inventario: [...datos.inventario].reverse() };
+    const a = vistaSinVenta(armarSnapshot(datos, OPCIONES), { clase: 'todos' }, OPCIONES);
+    const b = vistaSinVenta(armarSnapshot(alReves, OPCIONES), { clase: 'todos' }, OPCIONES);
+    expect(b.productos.map(p => p.codigo)).toEqual(a.productos.map(p => p.codigo));
+  });
+
+  it('la lista de resurtido trae un tope pero dice cuántos hay en total', () => {
+    const v = vistaResurtido(snap, {}, { tope: 1 });
+    expect(v.urgentes.length).toBeLessThanOrEqual(1);
+    expect(v.cuentas.urgentes).toBeGreaterThanOrEqual(v.urgentes.length);
+  });
+});

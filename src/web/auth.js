@@ -15,7 +15,13 @@ import { log } from '../log.js';
 export const COOKIE = 'invetory_sesion';
 // Hash de adorno: se compara contra él cuando el usuario no existe, para tardar
 // lo mismo que con uno real y no delatar qué usuarios hay.
-const HASH_FALSO = '$2b$12$abcdefghijklmnopqrstuuMOZGH2wJ0b8TKL4z8mDkKQ9Uj0qFbW';
+//
+// OJO: tiene que ser un bcrypt VÁLIDO de 60 caracteres exactos. bcryptjs revisa el
+// largo antes de hacer cuentas (`if (hashValue.length !== 60) return false`), así
+// que un señuelo de 59 se rechaza al instante y el usuario inventado contesta en
+// microsegundos mientras el real tarda medio segundo: justo la diferencia que
+// delata qué usuarios existen. Este es el hash real de un texto al azar.
+const HASH_FALSO = '$2b$12$C6UzMDM.H6dfI/f/IKcEe.5Et.PsQXY0i3bTdkbuJxHRtTwTQpGiy';
 
 const intentos = new Map();   // ip -> [marcas de tiempo de fallos]
 let bcryptEnElMinuto = [];    // marcas de tiempo de verificaciones
@@ -69,7 +75,15 @@ export function leerCookies(req) {
     if (i < 1) continue;
     const nombre = parte.slice(0, i).trim();
     const valor = parte.slice(i + 1).trim();
-    if (nombre) salida[nombre] = decodeURIComponent(valor);
+    if (!nombre) continue;
+    // Un "%" suelto en cualquier cookie hace que decodeURIComponent lance URIError.
+    // Sin este try, una cookie mal formada tumbaría TODAS las respuestas de la app
+    // (usuarioDe se llama en cada pantalla y en cada ruta del API).
+    try {
+      salida[nombre] = decodeURIComponent(valor);
+    } catch {
+      salida[nombre] = valor;
+    }
   }
   return salida;
 }
@@ -97,10 +111,20 @@ export function borrarCookie(res) {
   res.setHeader('Set-Cookie', partes.join('; '));
 }
 
-/** La IP real del celular viene de Cloudflare; si no, la del socket. */
+const PARECE_IP = /^[0-9a-fA-F:.]{3,45}$/;
+
+/**
+ * La IP real del celular viene de Cloudflare; si no, la del socket.
+ *
+ * Esa cadena es la llave del candado de 5 intentos, así que no se cree cualquier
+ * cosa: tiene que PARECER una IP y la petición tiene que venir de verdad por el
+ * túnel (Cloudflare siempre agrega cf-ray y reescribe cf-connecting-ip en su
+ * orilla, así que desde internet no se puede inventar). Si no se cumple, se usa
+ * la del socket y todos los que entren por ahí comparten el mismo candado.
+ */
 export function ipDe(req) {
   const cf = req.headers?.['cf-connecting-ip'];
-  if (typeof cf === 'string' && cf.length < 60) return cf;
+  if (typeof cf === 'string' && PARECE_IP.test(cf) && req.headers['cf-ray']) return cf;
   return req.ip || req.socket?.remoteAddress || 'desconocida';
 }
 
@@ -127,15 +151,35 @@ function anotarFallo(ip, ahora = Date.now()) {
   }
 }
 
+/**
+ * Olvida los intentos fallidos. Con una IP, solo los de esa IP (se usa al entrar
+ * bien). Sin argumentos, borra todo, incluido el contador global de bcrypt: esa
+ * forma es para las pruebas, que si no arrastran el cupo de un caso a otro.
+ */
 export function limpiarIntentos(ip) {
-  if (ip) intentos.delete(ip); else intentos.clear();
+  if (ip) { intentos.delete(ip); return; }
+  intentos.clear();
+  bcryptEnElMinuto = [];
 }
 
-function hayCupoBcrypt(ahora = Date.now()) {
+/**
+ * ¿Queda cupo para gastar CPU en un bcrypt?
+ *
+ * El tope global existe para que un bot no queme la CPU de la caja (ahí mismo
+ * corre el punto de venta). Pero si fuera un tope duro, cualquiera con la URL
+ * podría dejarlo en cero con usuarios inventados y el dueño ya no podría entrar.
+ * Por eso a quien NO ha fallado en la ventana (el dueño desde su celular) se le
+ * deja pasar aunque el tope esté lleno, hasta el triple: la puerta nunca se cierra
+ * del todo y el gasto sigue acotado.
+ */
+function hayCupoBcrypt(ahora, ipSinFallos) {
   bcryptEnElMinuto = limpiar(bcryptEnElMinuto, 60_000, ahora);
-  if (bcryptEnElMinuto.length >= config.sesion.bcryptPorMinuto) return false;
-  bcryptEnElMinuto.push(ahora);
-  return true;
+  const tope = config.sesion.bcryptPorMinuto;
+  if (bcryptEnElMinuto.length < tope || (ipSinFallos && bcryptEnElMinuto.length < tope * 3)) {
+    bcryptEnElMinuto.push(ahora);
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -145,7 +189,8 @@ function hayCupoBcrypt(ahora = Date.now()) {
 export async function revisarLogin({ usuario, contrasena, ip }) {
   const ahora = Date.now();
   if (bloqueado(ip, ahora)) return { ok: false, motivo: 'muchos_intentos' };
-  if (!hayCupoBcrypt(ahora)) return { ok: false, motivo: 'ocupado' };
+  const sinFallos = !(intentos.get(ip)?.length);
+  if (!hayCupoBcrypt(ahora, sinFallos)) return { ok: false, motivo: 'ocupado' };
 
   const nombre = String(usuario ?? '').trim().toLowerCase();
   const clave = String(contrasena ?? '');
@@ -167,10 +212,17 @@ export async function revisarLogin({ usuario, contrasena, ip }) {
   return { ok: true, usuario: cuenta.usuario };
 }
 
-/** Middleware para /api: sin sesión no se contesta nada. */
+/**
+ * Middleware para /api: sin sesión no se contesta nada.
+ *
+ * Además de la firma, se revisa que ese usuario SIGA existiendo en el .env. Así,
+ * quitar a alguien del .env y reiniciar lo deja fuera de inmediato; si no, su
+ * cookie serviría hasta que venciera (12 h).
+ */
 export function exigeSesion(req, res, siguiente) {
   const usuario = usuarioDe(req);
-  if (!usuario) {
+  const existe = usuario && config.sesion.usuarios.some(u => u.usuario === usuario);
+  if (!existe) {
     res.status(401).json({ error: 'Necesitas entrar', entrar: true });
     return;
   }

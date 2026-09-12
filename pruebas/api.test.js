@@ -208,12 +208,17 @@ describe('nada de dinero', () => {
       '/api/mas-vendidos?dias=7', '/api/mas-vendidos?dias=30',
       '/api/buscar?q=kinder', '/api/buscar?q=agua', '/api/producto/098733',
       '/api/producto/333333333333', '/api/producto/444444444444',
+      '/api/producto/0', '/api/producto/555555555555', '/api/producto/012000809996',
+      '/api/mas-vendidos?dias=30&cocina=1', '/api/sin-venta?clase=lento&orden=dias',
+      '/api/sin-venta?clase=todos&area=Casita%201&dias=90',
     ];
     const problemas = [];
     for (const ruta of rutas) {
       const r = await request(app).get(ruta).set('Cookie', cookie);
       expect(r.status, ruta).toBe(200);
       problemas.push(...revisarPrivacidad(r.body, ruta));
+      // Y sobre el texto crudo, por si algo se cuela fuera del árbol de objetos.
+      if (DINERO_EN_TEXTO.test(r.text)) problemas.push(`dinero en el texto de ${ruta}`);
     }
     expect(problemas).toEqual([]);
   });
@@ -246,5 +251,43 @@ describe('cabeceras', () => {
   it('robots.txt prohíbe todo', async () => {
     const r = await request(app).get('/robots.txt');
     expect(r.text).toContain('Disallow: /');
+  });
+});
+
+describe('regresiones de la revisión', () => {
+  it('una cookie mal formada no tumba la app (antes lanzaba URIError)', async () => {
+    const r = await request(app).get('/api/estado').set('Cookie', 'basura=%; otra=100%');
+    expect(r.status).toBe(401);       // sin sesión, pero contesta
+    const r2 = await request(app).get('/entrar').set('Cookie', 'x=%E0%A4%A');
+    expect([200, 503]).toContain(r2.status);
+  });
+
+  it('si al usuario lo quitan del .env, su cookie deja de servir', async () => {
+    await entrar();
+    const antes = config.sesion.usuarios;
+    config.sesion.usuarios = antes.filter(u => u.usuario !== 'dueno');
+    try {
+      const r = await request(app).get('/api/estado').set('Cookie', cookie);
+      expect(r.status).toBe(401);
+    } finally {
+      config.sesion.usuarios = antes;
+    }
+  });
+
+  it('el señuelo del usuario inexistente sí cuesta tiempo (no delata qué usuarios hay)', async () => {
+    // Si el hash de adorno fuera inválido, bcryptjs contestaría en microsegundos.
+    const t0 = Date.now();
+    await request(app).post('/api/login').send({ usuario: 'no-existe-nadie', contrasena: 'x' });
+    const conUsuarioFalso = Date.now() - t0;
+    expect(conUsuarioFalso).toBeGreaterThan(30);
+  });
+
+  it('el tope global de bcrypt no le cierra la puerta a quien no ha fallado', async () => {
+    config.sesion.bcryptPorMinuto = 1;
+    // Un "bot" quema el cupo desde su IP.
+    await request(app).post('/api/login').set('X-Forwarded-For', '9.9.9.9').send({ usuario: 'dueno', contrasena: 'mala' });
+    // El dueño, desde otra IP y sin fallos, SÍ puede entrar.
+    const r = await request(app).post('/api/login').send({ usuario: 'dueno', contrasena: CONTRASENA });
+    expect(r.status).toBe(200);
   });
 });

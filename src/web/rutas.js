@@ -3,7 +3,7 @@
 import express from 'express';
 import { config } from '../config.js';
 import {
-  asegurarDatos, estadoMotor, hayDatos, obtenerSnapshot,
+  asegurarDatos, estadoMotor, hayDatos, marcarUso, obtenerSnapshot,
 } from '../servicios/inventario.js';
 import {
   vistaBuscar, vistaEstado, vistaMasVendidos, vistaProducto, vistaResurtido, vistaSinVenta,
@@ -45,6 +45,9 @@ export function crearRutas() {
 
   // ── De aquí para abajo, se necesita sesión ──────────────────────────────
   r.use(exigeSesion);
+  // Ya con sesión: esto cuenta como "alguien está usando la app" y por eso se
+  // vuelven a programar los refrescos.
+  r.use((req, _res, siguiente) => { marcarUso(); siguiente(); });
 
   /** Devuelve la foto en memoria o avisa que todavía se está calculando. */
   const conDatos = manejador => (req, res) => {
@@ -91,7 +94,7 @@ export function crearRutas() {
       incluirCocina: siNo(req.query.cocina),
       incluirSinConteo: siNo(req.query.sinConteo),
       buscar: req.query.buscar ?? '',
-    }));
+    }, { tope: Math.min(Number(req.query.tope) || 150, 500) }));
   }));
 
   r.get('/mas-vendidos', conDatos((req, res, snap) => {

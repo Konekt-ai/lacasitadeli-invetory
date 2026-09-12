@@ -155,7 +155,10 @@ export function buscarDuplicados(sinVentas, candidatos, opciones = {}) {
     for (const [item, t] of tocados) {
       if (t.puntos < o.umbral) continue;
       // Empata a favor del que más vende (es el código "bueno" del producto).
-      const score = t.puntos + t.sim + Math.min(vendidas, 1000) / 100_000;
+      // Con un tope fijo, de 1,000 piezas en adelante todos empataban y ganaba el
+      // que viniera primero en la lista (o sea, el orden de SQL). El logaritmo
+      // sigue creciendo y nunca alcanza a un punto entero.
+      const score = t.puntos + t.sim + Math.log10(1 + Math.max(vendidas, 0)) / 1000;
       if (!item.mejor || score > item.mejor.score) {
         item.mejor = {
           score,

@@ -1,38 +1,42 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { api, type Estado } from '../api';
-import { Cargando, Foto, Opciones, Vacio, numero, usarNavegacion } from '../componentes/basicos';
+import { Aviso, Cargando, Foto, Opciones, Vacio, numero, usarNavegacion } from '../componentes/basicos';
+import { usarDatos } from '../componentes/usarDatos';
 
 export function MasVendidos({ estado }: { estado: Estado | null }) {
   const [dias, setDias] = useState(30);
   const [area, setArea] = useState('');
   const [cocina, setCocina] = useState(false);
-  const [productos, setProductos] = useState<Awaited<ReturnType<typeof api.masVendidos>>['productos']>([]);
-  const [cargando, setCargando] = useState(true);
   const { ir } = usarNavegacion();
 
-  useEffect(() => {
-    let vivo = true;
-    setCargando(true);
-    api.masVendidos({ dias, area, cocina })
-      .then(r => { if (vivo) setProductos(r.productos ?? []); })
-      .finally(() => { if (vivo) setCargando(false); });
-    return () => { vivo = false; };
-  }, [dias, area, cocina]);
+  const traer = useCallback(() => api.masVendidos({ dias, area, cocina }), [dias, area, cocina]);
+  const { datos, cargando, error, calculando, reintentar } = usarDatos(traer, [dias, area, cocina]);
+  const productos = datos?.productos ?? [];
 
   return (
     <div className="space-y-4">
       <Opciones valor={dias} alElegir={setDias} opciones={[{ valor: 7, texto: 'Últimos 7 días' }, { valor: 30, texto: 'Últimos 30 días' }]} />
-      <Opciones
-        valor={area}
-        alElegir={setArea}
-        opciones={[{ valor: '', texto: 'Toda la tienda' }, ...(estado?.areasVenta ?? []).map(a => ({ valor: a, texto: a }))]}
-      />
+      <div className="-mx-4 px-4">
+        <Opciones
+          valor={area}
+          alElegir={setArea}
+          opciones={[{ valor: '', texto: 'Toda la tienda' }, ...(estado?.areasVenta ?? []).map(a => ({ valor: a, texto: a }))]}
+        />
+      </div>
       <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={cocina} onChange={e => setCocina(e.target.checked)} className="h-4 w-4 accent-[#012d1d]" />
+        <input type="checkbox" checked={cocina} onChange={e => setCocina(e.target.checked)} className="h-5 w-5 accent-[#012d1d]" />
         Ver comida hecha en la casa
       </label>
 
-      {cargando && !productos.length ? <Cargando /> : !productos.length ? (
+      {error && (
+        <div className="space-y-2">
+          <Aviso texto={error} />
+          <button type="button" onClick={reintentar} className="boton-suave w-full py-3">Volver a intentar</button>
+        </div>
+      )}
+      {calculando && <Cargando texto="Estamos juntando la información del inventario. Tarda unos segundos." />}
+
+      {!datos && cargando && !calculando && !error ? <Cargando /> : !productos.length && datos ? (
         <Vacio icono="trending_up" titulo="No hay ventas en este periodo" />
       ) : (
         <ol className="space-y-2">

@@ -19,16 +19,12 @@ async function entrar(page) {
 test.describe('desde el celular', () => {
   test.beforeEach(async ({ page }) => { await entrar(page); });
 
-  test('sin sesión no se ve nada y el login pide usuario y contraseña', async ({ page, context }) => {
-    await context.clearCookies();
-    await page.goto('/resurtir');
-    await expect(page).toHaveURL(/\/entrar$/);
-    await expect(page.getByLabel('Contraseña')).toBeVisible();
-  });
-
   test('la pantalla de inicio muestra descontinuados con sus piezas', async ({ page }) => {
-    await expect(page.getByRole('button', { name: /Descontinuados/ })).toBeVisible();
-    await expect(page.getByText(/piezas paradas/).first()).toBeVisible();
+    const tarjeta = page.getByRole('button', { name: /Descontinuados/ });
+    await expect(tarjeta).toBeVisible();
+    // La tarjeta explica qué es cada grupo, con los umbrales del .env.
+    await expect(tarjeta).toContainText(/Sin venderse \d+\+ días o nunca/);
+    await expect(tarjeta).toContainText(/piezas/);
     await expect(page.locator('text=/\\d+ productos/').first()).toBeVisible();
     await page.screenshot({ path: 'pruebas/capturas/1-sin-venta.png', fullPage: false });
   });
@@ -78,7 +74,9 @@ test.describe('desde el celular', () => {
   });
 
   test('NUNCA aparece un signo de pesos ni un precio', async ({ page }) => {
-    const rutas = ['/', '/resurtir', '/mas-vendidos', '/buscar'];
+    // Se incluye la ficha del producto: es la ÚNICA pantalla que pinta la
+    // categoría y la marca, que vienen de NovaCaja (donde sí hay "CON IVA").
+    const rutas = ['/', '/resurtir', '/mas-vendidos', '/buscar', '/producto/098733', '/producto/012000809996'];
     for (const ruta of rutas) {
       await page.goto(ruta);
       await page.waitForTimeout(1500);
@@ -89,7 +87,7 @@ test.describe('desde el celular', () => {
   });
 
   test('nada se sale de la pantalla de 390 px', async ({ page }) => {
-    for (const ruta of ['/', '/resurtir', '/mas-vendidos', '/buscar']) {
+    for (const ruta of ['/', '/resurtir', '/mas-vendidos', '/buscar', '/producto/098733']) {
       await page.goto(ruta);
       await page.waitForTimeout(1200);
       const seSale = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
@@ -101,4 +99,21 @@ test.describe('desde el celular', () => {
     await page.getByRole('button', { name: 'Salir' }).click();
     await expect(page.getByLabel('Contraseña')).toBeVisible();
   });
+});
+
+// Este va aparte, con un navegador limpio: no basta con borrar las cookies del
+// contexto (Chromium las conserva en su almacén y la sesión revive al navegar).
+test('sin sesión no se ve nada y el login pide usuario y contraseña', async ({ browser }) => {
+  const limpio = await browser.newContext({ viewport: { width: 390, height: 844 }, baseURL: 'http://127.0.0.1:3010' });
+  const hoja = await limpio.newPage();
+  try {
+    await hoja.goto('/resurtir');
+    await expect(hoja).toHaveURL(/\/entrar$/);
+    await expect(hoja.getByLabel('Contraseña')).toBeVisible();
+    // Y el API tampoco suelta nada.
+    const r = await hoja.request.get('/api/sin-venta');
+    expect(r.status()).toBe(401);
+  } finally {
+    await limpio.close();
+  }
 });

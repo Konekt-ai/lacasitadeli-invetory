@@ -35,7 +35,8 @@ export const limpiarNombre = s => (s ?? '').toString()
  */
 export const limpiarCategoria = s => limpiarNombre(s)
   .replace(/\b(con|sin|libres?|libre de)\s+(iva|ieps)\b/gi, ' ')
-  .replace(/\b(grabadas?|gravadas?)\b/gi, ' ')
+  .replace(/\b(grabad[oa]s?|gravad[oa]s?)\b/gi, ' ')
+  .replace(/\b(iva|ieps)\s*\d+(?:[.,]\d+)?\s*%?/gi, ' ')
   .replace(/\b(iva|ieps)\b/gi, ' ')
   .replace(/\s*\/\s*$/, '')
   .replace(/\s+/g, ' ')
@@ -184,6 +185,20 @@ export function armarSnapshot(datos, opciones = {}) {
     hacia.vendidas.d14 += desde.vendidas.d14 * u;
     hacia.vendidas.d30 += desde.vendidas.d30 * u;
     hacia.vendidas.d120 += desde.vendidas.d120 * u;
+    // También POR ÁREA: el resurtido solo mira porArea[].v14, así que sin esto un
+    // producto que se vende con su código de caja seguía saliendo como si no se
+    // vendiera en el anaquel.
+    for (const [area, enArea] of desde.porArea) {
+      if (!num(enArea.v7) && !num(enArea.v14) && !num(enArea.v30)) continue;
+      let destino = hacia.porArea.get(area);
+      if (!destino) {
+        destino = { area, cantidad: null, apartado: 0, ultimaEntrada: null, ultimaSalida: null };
+        hacia.porArea.set(area, destino);
+      }
+      destino.v7 = num(destino.v7) + num(enArea.v7) * u;
+      destino.v14 = num(destino.v14) + num(enArea.v14) * u;
+      destino.v30 = num(destino.v30) + num(enArea.v30) * u;
+    }
   }
 
   // 6) Catálogo de NovaCaja: nombre "oficial", categoría, marca y si está dado de alta
@@ -247,7 +262,12 @@ export function armarSnapshot(datos, opciones = {}) {
         area: a.area,
         cantidad: a.cantidad,
         apartado: a.apartado || 0,
+        // La fecha va dos veces a propósito: el texto ISO para el celular y el
+        // Date crudo para quien tenga que volver a hacer cuentas. Volver a parsear
+        // el ISO con -06:00 y leerle las partes UTC corría la fecha un día para
+        // todo lo que entró después de las 18:00 (la tienda recibe de tarde).
         ultimaEntrada: a.ultimaEntrada ? naiveAIso(a.ultimaEntrada) : null,
+        entradaDate: a.ultimaEntrada ?? null,
         diasDesdeEntrada: a.ultimaEntrada ? diasEntre(a.ultimaEntrada, ahora) : null,
         v14: num(a.v14),
       }))
@@ -266,8 +286,10 @@ export function armarSnapshot(datos, opciones = {}) {
       const enArea = p.porArea.get(area);
       const vendidas = num(enArea?.v14);
       const contado = enArea && enArea.cantidad !== null && enArea.cantidad !== undefined;
-      if (!vendidas && !contado) continue;          // ni se vende ahí ni está contado ahí
-      if (!vendidas) continue;                       // está contado pero no se vende: no es resurtido
+      // Puede salir NEGATIVO si en la ventana hubo más devoluciones que ventas.
+      // Eso no es "se vende", y con un guardia de falsy (-3 es truthy) se colaba a
+      // la lista de urgentes con una venta diaria en negativo.
+      if (!(vendidas > 0)) continue;
       const fila = calcularResurtido(
         {
           codigo: p.codigo,

@@ -1,33 +1,22 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { api, type Producto } from '../api';
-import { Cargando, Icono, Vacio, numero } from '../componentes/basicos';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { api } from '../api';
+import { Aviso, Cargando, Icono, Vacio, numero } from '../componentes/basicos';
+import { usarDatos } from '../componentes/usarDatos';
 import { TarjetaProducto } from '../componentes/TarjetaProducto';
 
 export function Buscar() {
   const [texto, setTexto] = useState('');
-  const [productos, setProductos] = useState<Producto[]>([]);
-  const [cuantos, setCuantos] = useState(0);
-  const [cargando, setCargando] = useState(false);
   const caja = useRef<HTMLInputElement>(null);
+  const corto = texto.trim().length < 2;
 
   useEffect(() => { caja.current?.focus(); }, []);
 
-  useEffect(() => {
-    if (texto.trim().length < 2) { setProductos([]); setCuantos(0); return undefined; }
-    let vivo = true;
-    setCargando(true);
-    const t = setTimeout(async () => {
-      try {
-        const r = await api.buscar(texto.trim());
-        if (!vivo) return;
-        setProductos(r.productos ?? []);
-        setCuantos(r.cuantos ?? 0);
-      } finally {
-        if (vivo) setCargando(false);
-      }
-    }, 300);
-    return () => { vivo = false; clearTimeout(t); };
-  }, [texto]);
+  const traer = useCallback(
+    () => (corto ? Promise.resolve({ q: texto, cuantos: 0, productos: [] }) : api.buscar(texto.trim())),
+    [texto, corto],
+  );
+  const { datos, cargando, error, calculando, reintentar } = usarDatos(traer, [texto], { retrasoMs: 300 });
+  const productos = datos?.productos ?? [];
 
   return (
     <div className="space-y-4">
@@ -40,24 +29,37 @@ export function Buscar() {
           placeholder="Nombre o código del producto"
           aria-label="Buscar producto"
           inputMode="search"
-          className="w-full rounded-full border border-outline-variant/70 bg-surface-container-lowest py-3 pl-11 pr-10 text-base outline-none focus:border-primary"
+          className="w-full rounded-full border border-outline-variant/70 bg-surface-container-lowest py-3 pl-11 pr-12 text-base outline-none focus:border-primary"
         />
         {texto && (
-          <button type="button" onClick={() => setTexto('')} aria-label="Limpiar" className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant">
+          <button
+            type="button"
+            onClick={() => setTexto('')}
+            aria-label="Limpiar"
+            className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center text-on-surface-variant"
+          >
             <Icono nombre="close" className="text-[20px]" />
           </button>
         )}
       </div>
 
-      {texto.trim().length < 2 ? (
+      {error && (
+        <div className="space-y-2">
+          <Aviso texto={error} />
+          <button type="button" onClick={reintentar} className="boton-suave w-full py-3">Volver a intentar</button>
+        </div>
+      )}
+      {calculando && <Cargando texto="Estamos juntando la información del inventario. Tarda unos segundos." />}
+
+      {corto ? (
         <Vacio icono="search" titulo="Busca un producto" detalle="Escribe parte del nombre o el código de barras para ver dónde hay piezas." />
-      ) : cargando && !productos.length ? (
+      ) : cargando && !productos.length && !error ? (
         <Cargando />
-      ) : !productos.length ? (
+      ) : !productos.length && datos ? (
         <Vacio icono="search" titulo="No se encontró nada" detalle="Revisa cómo está escrito o prueba con el código." />
       ) : (
         <>
-          <p className="text-sm text-on-surface-variant">{numero(cuantos)} resultados</p>
+          <p className="text-sm text-on-surface-variant">{numero(datos?.cuantos ?? 0)} resultados</p>
           <div className="space-y-2">
             {productos.map(p => <TarjetaProducto key={p.codigo} p={p} />)}
           </div>

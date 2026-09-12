@@ -51,6 +51,14 @@ export function App() {
     return () => window.removeEventListener('popstate', atras);
   }, []);
 
+  // Cuando se vence la sesión (12 h), cualquier pantalla que reciba un 401 avisa
+  // por aquí. Antes solo lo notaba el encabezado y la app se quedaba congelada.
+  useEffect(() => {
+    const seVencio = () => { setEntro(false); setEstado(null); };
+    window.addEventListener('invetory:sin-sesion', seVencio);
+    return () => window.removeEventListener('invetory:sin-sesion', seVencio);
+  }, []);
+
   const cargarEstado = useCallback(async (fresco = false) => {
     try {
       if (fresco) setRefrescando(true);

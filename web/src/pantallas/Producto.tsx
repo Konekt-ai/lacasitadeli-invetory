@@ -1,32 +1,43 @@
-import React, { useEffect, useState } from 'react';
-import { api, type Producto as TipoProducto } from '../api';
+import React, { useCallback } from 'react';
+import { api } from '../api';
 import { Aviso, Cargando, Foto, Icono, Vacio, numero, usarNavegacion } from '../componentes/basicos';
+import { usarDatos } from '../componentes/usarDatos';
 
 export function Producto({ codigo }: { codigo: string }) {
-  const [p, setP] = useState<TipoProducto | null>(null);
-  const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState('');
   const { ir } = usarNavegacion();
+  const traer = useCallback(() => api.producto(codigo), [codigo]);
+  const { datos, cargando, error, calculando, reintentar } = usarDatos(traer, [codigo]);
+  const p = datos?.producto ?? null;
 
-  useEffect(() => {
-    let vivo = true;
-    setCargando(true);
-    api.producto(codigo)
-      .then(r => { if (vivo) setP(r.producto); })
-      .catch(e => { if (vivo) setError((e as Error).message); })
-      .finally(() => { if (vivo) setCargando(false); });
-    return () => { vivo = false; };
-  }, [codigo]);
-
-  if (cargando) return <Cargando />;
-  if (error || !p) {
+  if (calculando) {
     return (
       <div className="space-y-4">
         <Volver />
-        <Vacio titulo="No se encontró ese producto" detalle={error} />
+        <Cargando texto="Estamos juntando la información del inventario. Tarda unos segundos." />
       </div>
     );
   }
+  if (cargando && !p) return <Cargando />;
+  if (error) {
+    // Un error de red NO es "no existe el producto": eso confundía de más.
+    return (
+      <div className="space-y-4">
+        <Volver />
+        <Aviso texto={error} />
+        <button type="button" onClick={reintentar} className="boton-suave w-full py-3">Volver a intentar</button>
+      </div>
+    );
+  }
+  if (!p) {
+    return (
+      <div className="space-y-4">
+        <Volver />
+        <Vacio titulo="No se encontró ese producto" detalle="Puede que ese código no esté contado ni se haya vendido últimamente." />
+      </div>
+    );
+  }
+
+  const gemelo = p.duplicado?.codigo ?? '';
 
   return (
     <div className="space-y-4">
@@ -60,7 +71,11 @@ export function Producto({ codigo }: { codigo: string }) {
         {p.duplicado && (
           <div className="mt-3 rounded-lg bg-primary-fixed/60 px-3 py-2 text-sm text-on-primary-fixed">
             {p.duplicado.texto}
-            <button type="button" onClick={() => ir(`/producto/${encodeURIComponent(p.duplicado!.codigo)}`)} className="ml-1 underline">
+            <button
+              type="button"
+              onClick={() => ir(`/producto/${encodeURIComponent(gemelo)}`)}
+              className="ml-1 underline"
+            >
               ver ese
             </button>
           </div>

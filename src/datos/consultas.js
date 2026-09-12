@@ -29,26 +29,30 @@ SET NOCOUNT ON;
 -- 0) Áreas activas del sistema de bodega (nombre y color de los chips)
 SELECT nombre, color, activa, orden
 FROM dbo.ubicaciones_bodega WITH (NOLOCK)
-WHERE activa = 1;
+WHERE activa = 1
+OPTION (MAXDOP 1);
 
 -- 1) Qué caja vende en qué anaquel (17 y 21 -> Casita 1, 7 -> Casita 2)
-SELECT est_codigo, area FROM dbo.estacion_area_map WITH (NOLOCK);
+SELECT est_codigo, area FROM dbo.estacion_area_map WITH (NOLOCK) OPTION (MAXDOP 1);
 
 -- 2) Existencia física contada con la TC52 (incluye filas en 0: "contado y no hay",
 --    que NO es lo mismo que no tener fila = "nunca se contó aquí")
 SELECT codigo_barras AS codigo, ubicacion, cantidad, ultima_entrada, ultima_salida, creado, nombre
-FROM dbo.inventario_bodega WITH (NOLOCK);
+FROM dbo.inventario_bodega WITH (NOLOCK)
+OPTION (MAXDOP 1);
 
 -- 3) Piezas apartadas por pedidos de la página web (disponible = físico - apartado)
 SELECT codigo_barras AS codigo, ubicacion, SUM(CAST(cantidad AS bigint)) AS apartado
 FROM dbo.reservas_bodega WITH (NOLOCK)
 WHERE activa = 1
-GROUP BY codigo_barras, ubicacion;
+GROUP BY codigo_barras, ubicacion
+OPTION (MAXDOP 1);
 
 -- 4) Códigos de caja que equivalen a N piezas de otro código
 SELECT codigo, codigo_base, unidades
 FROM dbo.codigos_producto WITH (NOLOCK)
-WHERE codigo <> codigo_base OR unidades > 1;
+WHERE codigo <> codigo_base OR unidades > 1
+OPTION (MAXDOP 1);
 
 -- 5) Ventas por ÁREA de los últimos 30 días. El área sale de la CAJA del ticket,
 --    así que aquí sí hace falta el join por las 4 llaves (FolConsecutivo solo NO
@@ -63,7 +67,7 @@ JOIN dbo.Tickets t WITH (NOLOCK)
   ON ps.FolTda_Codigo = t.FolTda_Codigo AND ps.FolEst_Codigo = t.FolEst_Codigo
  AND ps.FolDoc_Codigo = t.FolDoc_Codigo AND ps.FolConsecutivo = t.FolConsecutivo
 JOIN dbo.estacion_area_map m WITH (NOLOCK) ON m.est_codigo = t.FolEst_Codigo
-WHERE t.T_Fecha >= DATEADD(day,-30,GETDATE())
+WHERE t.T_Fecha >= DATEADD(day,-@DIAS,GETDATE())
   AND ps.Codigo IS NOT NULL AND ps.Codigo <> ''
 GROUP BY m.area, ps.Codigo
 OPTION (MAXDOP 1);
@@ -122,7 +126,8 @@ CREATE TABLE #cod (codigo nvarchar(64) COLLATE DATABASE_DEFAULT PRIMARY KEY);
 INSERT INTO #cod (codigo)
 SELECT codigo_barras FROM dbo.inventario_bodega WITH (NOLOCK) GROUP BY codigo_barras
 UNION
-SELECT codigo FROM #uv WHERE v120 > 0;
+SELECT codigo FROM #uv WHERE v120 > 0
+OPTION (MAXDOP 1);
 
 CREATE TABLE #res (codigo nvarchar(64) COLLATE DATABASE_DEFAULT PRIMARY KEY,
                    art_codigo nvarchar(64) COLLATE DATABASE_DEFAULT, via varchar(10),
@@ -218,5 +223,9 @@ OPTION (MAXDOP 1);
 /** Reemplaza los marcadores @VENTANA del lote rápido (no son parámetros de SQL). */
 export function loteRapido({ ventanaVentaDiariaDias = 14 } = {}) {
   const ventana = Number(ventanaVentaDiariaDias) || 14;
-  return LOTE_RAPIDO.replace('@VENTANA', String(ventana));
+  // La ventana de "cuánto vende al día" es configurable; el WHERE tiene que
+  // abarcarla, si no, con VENTANA_VENTA_DIARIA_DIAS=45 se estaría dividiendo entre
+  // 45 días lo vendido en 30 y todo parecería vender menos de lo que vende.
+  const dias = Math.max(30, ventana);
+  return LOTE_RAPIDO.replace('@VENTANA', String(ventana)).replace('@DIAS', String(dias));
 }

@@ -53,8 +53,11 @@ export function calcularResurtido(e, opciones = {}) {
   }
 
   const coberturaDias = seVende && contado ? disponible / ventaDiaria : null;
-  const sugerido = seVende
-    ? Math.max(0, Math.ceil(ventaDiaria * diasSugeridos - Math.max(disponible ?? 0, 0)))
+  // Si NO está contado no se puede sugerir cuánto falta: tratar "sin fila" como
+  // cero es justo lo que este módulo evita. Antes decía "faltan 35" en el mismo
+  // renglón que "no está contado: cuéntalo con la TC52" — dos órdenes contrarias.
+  const sugerido = seVende && contado
+    ? Math.max(0, Math.ceil(ventaDiaria * diasSugeridos - Math.max(disponible, 0)))
     : 0;
 
   let estado = 'ok';

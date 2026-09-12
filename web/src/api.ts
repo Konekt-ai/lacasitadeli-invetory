@@ -44,12 +44,28 @@ export type FilaResurtido = {
 };
 
 export class SinSesion extends Error {}
+/** El servidor todavía está armando la foto del inventario (503). */
+export class Calculando extends Error {}
+
+/** Aviso para que la App mande al login sin que cada pantalla tenga que saberlo. */
+function avisarSinSesion() {
+  try { window.dispatchEvent(new CustomEvent('invetory:sin-sesion')); } catch { /* nada */ }
+}
 
 async function pedir<T>(ruta: string): Promise<T> {
-  const r = await fetch(ruta, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
-  if (r.status === 401) throw new SinSesion('Necesitas entrar');
+  let r: Response;
+  try {
+    r = await fetch(ruta, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+  } catch {
+    // Sin internet, el túnel caído o el celular en el elevador.
+    throw new Error('No se pudo conectar. Revisa tu internet y vuelve a intentar.');
+  }
+  if (r.status === 401) { avisarSinSesion(); throw new SinSesion('Necesitas entrar'); }
   const cuerpo = await r.json().catch(() => ({}));
-  if (r.status === 503) return { ...cuerpo, calculando: true } as T;
+  // OJO: el 503 NO se puede devolver como si fueran datos buenos. Antes se
+  // regresaba {listo:false,...} sin las listas y la pantalla de resurtido tronaba
+  // al leer datos.urgentes.length.
+  if (r.status === 503) throw new Calculando((cuerpo as any).mensaje || 'Estamos juntando la información del inventario.');
   if (!r.ok) throw new Error((cuerpo as any).error || 'No se pudo consultar');
   return cuerpo as T;
 }
@@ -84,21 +100,20 @@ export const api = {
   sinVenta: (f: { clase?: string; area?: string; dias?: number; buscar?: string; orden?: string; pagina?: number }) =>
     pedir<{
       tarjetas: Tarjeta[]; cuantos: number; piezas: number; pagina: number; hayMas: boolean;
-      productos: Producto[]; calculando?: boolean;
+      productos: Producto[];
     }>(`/api/sin-venta${q(f)}`),
 
   resurtido: (f: { area?: string; cocina?: boolean; sinConteo?: boolean; buscar?: string }) =>
     pedir<{
       cuentas: { urgentes: number; bajos: number; sinConteo: number };
-      areasVenta: string[]; urgentes: FilaResurtido[]; bajos: FilaResurtido[]; sinConteo: FilaResurtido[];
-      calculando?: boolean;
+      areasVenta: string[]; tope: number;
+      urgentes: FilaResurtido[]; bajos: FilaResurtido[]; sinConteo: FilaResurtido[];
     }>(`/api/resurtido${q(f)}`),
 
   masVendidos: (f: { dias?: number; area?: string; cocina?: boolean }) =>
     pedir<{
       cuantos: number; areasVenta: string[];
       productos: Array<{ codigo: string; nombre: string; foto: string | null; piezas: number; clase: string; piezasEnTienda: number | null; esCocina: boolean }>;
-      calculando?: boolean;
     }>(`/api/mas-vendidos${q(f)}`),
 
   buscar: (texto: string) => pedir<{ q: string; cuantos: number; productos: Producto[] }>(`/api/buscar${q({ q: texto })}`),

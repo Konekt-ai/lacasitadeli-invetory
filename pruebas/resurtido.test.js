@@ -135,3 +135,20 @@ describe('esCocina', () => {
     expect(esCocina({ codigo: '1', nombre: 'LC CREMA' }, COCINA)).toBe(false); // "LC" al principio no cuenta
   });
 });
+
+// ── Regresiones de la revisión adversarial ──────────────────────────────────
+describe('regresiones', () => {
+  it('sin conteo NO sugiere cantidad (antes decía "faltan 35" junto a "cuéntalo")', () => {
+    const r = calcular({ codigo: 'x', area: 'Casita 2', vendidasVentana: 70, stock: null });
+    expect(r.estado).toBe('sin_conteo');
+    expect(r.sugerido).toBe(0);
+    expect(r.accion.texto).toContain('cuéntalo con la TC52');
+  });
+
+  it('una venta negativa (más devoluciones que ventas) no cuenta como que se vende', () => {
+    const r = calcular({ codigo: 'x', area: 'Casita 1', vendidasVentana: -3, stock: 5 });
+    expect(r.ventaDiaria).toBeLessThan(0);
+    expect(r.estado).toBe('ok');       // no urgente
+    expect(r.sugerido).toBe(0);
+  });
+});

@@ -30,6 +30,14 @@ function armarConfig() {
 
 export async function obtenerPool() {
   if (pool?.connected && !pool._destroyed) return pool;
+  // Si había uno y ya no sirve, se cierra ANTES de abrir otro: si no, cada
+  // reconexión dejaba un pool abandonado con sus conexiones abiertas contra el SQL
+  // Server del punto de venta.
+  if (pool && !conectando) {
+    const viejo = pool;
+    pool = null;
+    viejo.close().catch(() => {});
+  }
   if (!conectando) {
     conectando = new sql.ConnectionPool(armarConfig()).connect()
       .then(p => {

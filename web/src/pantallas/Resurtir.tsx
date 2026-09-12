@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { api, type Estado, type FilaResurtido } from '../api';
-import { Cargando, Foto, Icono, Opciones, Vacio, numero, usarNavegacion } from '../componentes/basicos';
+import { Aviso, Cargando, Foto, Icono, Opciones, Vacio, numero, usarNavegacion } from '../componentes/basicos';
+import { usarDatos } from '../componentes/usarDatos';
 
 // Las palomitas se guardan SOLO en este celular (localStorage). El servidor no
 // guarda nada: esta app no escribe en el negocio.
@@ -21,18 +22,10 @@ export function Resurtir({ estado }: { estado: Estado | null }) {
   const [area, setArea] = useState('');
   const [cocina, setCocina] = useState(false);
   const [sinConteo, setSinConteo] = useState(false);
-  const [datos, setDatos] = useState<{ urgentes: FilaResurtido[]; bajos: FilaResurtido[]; sinConteo: FilaResurtido[] } | null>(null);
-  const [cargando, setCargando] = useState(true);
   const [palomeados, setPalomeados] = useState<Record<string, number>>(leerPalomeados);
 
-  useEffect(() => {
-    let vivo = true;
-    setCargando(true);
-    api.resurtido({ area, cocina, sinConteo })
-      .then(r => { if (vivo) setDatos(r); })
-      .finally(() => { if (vivo) setCargando(false); });
-    return () => { vivo = false; };
-  }, [area, cocina, sinConteo]);
+  const traer = useCallback(() => api.resurtido({ area, cocina, sinConteo }), [area, cocina, sinConteo]);
+  const { datos, cargando, error, calculando, reintentar } = usarDatos(traer, [area, cocina, sinConteo]);
 
   const palomear = (llave: string) => {
     setPalomeados(prev => {
@@ -55,22 +48,34 @@ export function Resurtir({ estado }: { estado: Estado | null }) {
 
       <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
         <label className="flex items-center gap-2">
-          <input type="checkbox" checked={cocina} onChange={e => setCocina(e.target.checked)} className="h-4 w-4 accent-[#012d1d]" />
+          <input type="checkbox" checked={cocina} onChange={e => setCocina(e.target.checked)} className="h-5 w-5 accent-[#012d1d]" />
           Ver comida de cocina
         </label>
         <label className="flex items-center gap-2">
-          <input type="checkbox" checked={sinConteo} onChange={e => setSinConteo(e.target.checked)} className="h-4 w-4 accent-[#012d1d]" />
+          <input type="checkbox" checked={sinConteo} onChange={e => setSinConteo(e.target.checked)} className="h-5 w-5 accent-[#012d1d]" />
           Ver lo que nunca se ha contado
         </label>
       </div>
 
-      {cargando && !datos ? <Cargando /> : !datos ? null : (
+      {error && (
+        <div className="space-y-2">
+          <Aviso texto={error} />
+          <button type="button" onClick={reintentar} className="boton-suave w-full py-3">Volver a intentar</button>
+        </div>
+      )}
+
+      {calculando && <Cargando texto="Estamos juntando la información del inventario. Tarda unos segundos." />}
+
+      {!datos && cargando && !calculando && !error && <Cargando />}
+
+      {datos && (
         <>
           <Grupo
             titulo="Urgente"
             detalle="Se acabó o alcanza para menos de 2 días"
             tono="error"
             filas={datos.urgentes}
+            deEsos={datos.cuentas.urgentes}
             palomeados={palomeados}
             palomear={palomear}
           />
@@ -79,6 +84,7 @@ export function Resurtir({ estado }: { estado: Estado | null }) {
             detalle="Alcanza para menos de una semana"
             tono="aviso"
             filas={datos.bajos}
+            deEsos={datos.cuentas.bajos}
             palomeados={palomeados}
             palomear={palomear}
           />
@@ -87,6 +93,7 @@ export function Resurtir({ estado }: { estado: Estado | null }) {
             detalle="Hay que contarlo con la TC52 para saber cuánto queda"
             tono="normal"
             filas={datos.sinConteo}
+            deEsos={datos.cuentas.sinConteo}
             palomeados={palomeados}
             palomear={palomear}
           />
@@ -102,22 +109,24 @@ export function Resurtir({ estado }: { estado: Estado | null }) {
 const POR_TANDA = 40;
 
 function Grupo({
-  titulo, detalle, tono, filas, palomeados, palomear,
+  titulo, detalle, tono, filas, deEsos, palomeados, palomear,
 }: {
   titulo: string; detalle: string; tono: 'error' | 'aviso' | 'normal';
-  filas: FilaResurtido[]; palomeados: Record<string, number>; palomear: (llave: string) => void;
+  filas: FilaResurtido[]; deEsos: number;
+  palomeados: Record<string, number>; palomear: (llave: string) => void;
 }) {
   const [abierto, setAbierto] = useState(tono !== 'normal');
   // En Casita 1 hay cientos de urgentes: se pintan de a poco para que el celular
-  // no se atore con 700 tarjetas de un jalón.
+  // no se atore con cientos de tarjetas de un jalón.
   const [cuantas, setCuantas] = useState(POR_TANDA);
   if (!filas.length) return null;
   const color = tono === 'error' ? 'bg-error text-on-error' : tono === 'aviso' ? 'bg-secondary text-on-secondary' : 'bg-surface-variant text-on-surface-variant';
+  const fueraDeLista = Math.max(0, deEsos - filas.length);
 
   return (
     <section>
-      <button type="button" onClick={() => setAbierto(a => !a)} aria-expanded={abierto} className="mb-2 flex w-full items-center gap-2 text-left">
-        <span className={`chip ${color}`}>{numero(filas.length)}</span>
+      <button type="button" onClick={() => setAbierto(a => !a)} aria-expanded={abierto} className="mb-2 flex w-full items-center gap-2 py-1 text-left">
+        <span className={`chip ${color}`}>{numero(deEsos)}</span>
         <span className="flex-1">
           <span className="titulo block text-lg leading-tight">{titulo}</span>
           <span className="text-xs text-on-surface-variant">{detalle}</span>
@@ -134,6 +143,11 @@ function Grupo({
               Ver más ({numero(filas.length - cuantas)} faltan)
             </button>
           )}
+          {filas.length <= cuantas && fueraDeLista > 0 && (
+            <p className="py-2 text-center text-xs text-on-surface-variant">
+              Hay {numero(fueraDeLista)} más. Filtra por área para verlos.
+            </p>
+          )}
         </div>
       )}
     </section>
@@ -146,13 +160,14 @@ function Fila({ f, palomeado, palomear }: { f: FilaResurtido; palomeado: boolean
   const bodega = f.enRespaldo?.[0];
 
   return (
-    <div className={`tarjeta flex gap-3 p-3 ${palomeado ? 'opacity-55' : ''}`}>
+    <div className={`tarjeta flex gap-2 p-3 ${palomeado ? 'opacity-55' : ''}`}>
+      {/* Área de toque de 44 px: se palomea con el pulgar, de pie y con una mano. */}
       <button
         type="button"
         onClick={() => palomear(llave)}
         aria-pressed={palomeado}
         aria-label={palomeado ? 'Quitar palomita' : 'Marcar como surtido'}
-        className="shrink-0 self-start pt-0.5 text-primary"
+        className="-m-1 flex h-11 w-11 shrink-0 items-center justify-center self-start text-primary"
       >
         <Icono nombre={palomeado ? 'check_box' : 'check_box_outline_blank'} className="text-[26px]" />
       </button>
