@@ -62,12 +62,15 @@ GRANT SELECT ON dbo.estacion_area_map  (est_codigo, area)                    TO 
 GRANT SELECT ON dbo.codigos_producto   (codigo, codigo_base, unidades, tipo) TO [inventory_ro];
 GRANT SELECT ON dbo.reservas_bodega    (codigo_barras, ubicacion, cantidad, activa) TO [inventory_ro];
 
--- Movimientos de la TC52 y de las ventas: solo para saber qué se vendió con la
--- existencia en 0 ("inventario desfasado"). Sin `notas` (trae folios de ticket)
--- ni `area`. Se agregó el 2026-09-12; en una caja ya instalada basta con correr
--- esta línea sola.
+-- Movimientos de la TC52 y de las ventas: para saber qué se vendió con la
+-- existencia en 0 ("inventario desfasado") y para los "últimos 20 movimientos" de
+-- la ficha. Sin `notas` (trae folios de ticket). `area` (origen de un traslado) y
+-- `stock_despues` se agregaron el 2026-09-15 (versión 2): en una caja ya instalada
+-- basta con correr ESTA línea sola con sa (sqlcmd o el Management Studio); si no
+-- se corre, la app sigue funcionando y la ficha muestra los movimientos sin
+-- origen ni "quedaron N".
 GRANT SELECT ON dbo.movimientos_bodega
-    (codigo_barras, tipo, cantidad, ubicacion, stock_antes, motivo, fecha)
+    (codigo_barras, tipo, cantidad, ubicacion, area, stock_antes, stock_despues, motivo, fecha)
     TO [inventory_ro];
 GO
 

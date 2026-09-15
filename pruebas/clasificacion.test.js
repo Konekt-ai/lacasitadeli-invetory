@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clasificar, resumirPorClase } from '../src/calculos/clasificacion.js';
+import { CLASES, ETIQUETAS, clasificar, resumirPorClase } from '../src/calculos/clasificacion.js';
 import { AHORA, haceDias } from './datos-de-prueba.js';
 
 const opciones = { descontinuadoDias: 90, lentoDias: 30, nuevoDias: 30, ahora: AHORA };
@@ -34,11 +34,11 @@ describe('clasificar', () => {
     })).toBe('nuevo');
   });
 
-  it('nunca vendido y ya lleva tiempo en la tienda = descontinuado (Pepsi Wild Cherry)', () => {
+  it('nunca vendido y ya lleva tiempo en la tienda = sin movimiento (Pepsi Wild Cherry), NO descontinuado', () => {
     expect(clase({
       codigo: '012000809996', alta: true, ultimaVenta: null,
       ultimaEntrada: haceDias(29), primeraVez: haceDias(95), duplicado: null,
-    })).toBe('descontinuado');
+    })).toBe('sin_movimiento');
   });
 
   it('un surtido interno reciente NO vuelve nuevo a un estancado (Duncan Hines: 144 días sin venta)', () => {
@@ -46,7 +46,7 @@ describe('clasificar', () => {
     expect(clase({
       codigo: '644209307579', alta: true, ultimaVenta: haceDias(144),
       ultimaEntrada: haceDias(14), primeraVez: haceDias(88), duplicado: null,
-    })).toBe('descontinuado');
+    })).toBe('sin_movimiento');
   });
 
   it('vendió hace 45 días = lento', () => {
@@ -68,7 +68,14 @@ describe('clasificar', () => {
     expect(clase({ ...base, ultimaVenta: haceDias(29) })).toBe('activo');
     expect(clase({ ...base, ultimaVenta: haceDias(30) })).toBe('lento');
     expect(clase({ ...base, ultimaVenta: haceDias(89) })).toBe('lento');
-    expect(clase({ ...base, ultimaVenta: haceDias(90) })).toBe('descontinuado');
+    expect(clase({ ...base, ultimaVenta: haceDias(90) })).toBe('sin_movimiento');
+  });
+
+  it('acepta el nombre nuevo del umbral (sinMovimientoDias) y el viejo (descontinuadoDias)', () => {
+    const p = { codigo: 'x', alta: true, ultimaVenta: haceDias(60), ultimaEntrada: haceDias(300), primeraVez: haceDias(300), duplicado: null };
+    expect(clasificar(p, { sinMovimientoDias: 60, lentoDias: 30, nuevoDias: 30, ahora: AHORA }).clase).toBe('sin_movimiento');
+    expect(clasificar(p, { descontinuadoDias: 60, lentoDias: 30, nuevoDias: 30, ahora: AHORA }).clase).toBe('sin_movimiento');
+    expect(clasificar(p, { lentoDias: 30, nuevoDias: 30, ahora: AHORA }).clase).toBe('lento');   // default 90
   });
 
   it('un producto que vende no se vuelve "nuevo" por resurtirlo', () => {
@@ -93,17 +100,26 @@ describe('clasificar', () => {
     expect(r.diasSinVenta).toBe(143);
     expect(r.nuncaVendido).toBe(false);
   });
+
+  it('"descontinuado" ya no es una clase: eso solo lo decide el dueño en el Admin', () => {
+    expect(CLASES).toEqual(['sin_alta', 'duplicado_probable', 'nuevo', 'sin_movimiento', 'lento', 'activo']);
+    expect(CLASES).not.toContain('descontinuado');
+    expect(ETIQUETAS.sin_movimiento).toBe('Sin movimiento 90+ días');
+    expect(ETIQUETAS.descontinuado).toBeUndefined();
+    for (const c of CLASES) expect(ETIQUETAS[c], c).toBeTruthy();
+  });
 });
 
 describe('resumirPorClase', () => {
   it('suma productos y piezas por clase', () => {
     const r = resumirPorClase([
-      { clase: 'descontinuado', piezas: 100 },
-      { clase: 'descontinuado', piezas: 50 },
+      { clase: 'sin_movimiento', piezas: 100 },
+      { clase: 'sin_movimiento', piezas: 50 },
       { clase: 'activo', piezas: 7 },
     ]);
-    expect(r.descontinuado).toMatchObject({ productos: 2, piezas: 150 });
+    expect(r.sin_movimiento).toMatchObject({ productos: 2, piezas: 150, etiqueta: 'Sin movimiento 90+ días' });
     expect(r.activo).toMatchObject({ productos: 1, piezas: 7 });
     expect(r.lento).toMatchObject({ productos: 0, piezas: 0 });
+    expect(r.descontinuado).toBeUndefined();
   });
 });

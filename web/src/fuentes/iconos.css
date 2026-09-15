@@ -1,6 +1,21 @@
 /* Material Symbols Outlined, pero SOLO con los íconos que usa esta app (3 KB en
    vez de 3 MB). El archivo se bajó de Google una vez y vive aquí: así la página
-   no depende de internet ni la CSP tiene que abrirse a otros dominios. */
+   no depende de internet ni la CSP tiene que abrirse a otros dominios.
+   Si hace falta otro ícono, se vuelve a bajar el subconjunto con TODOS los
+   nombres (fonts.googleapis.com/css2?family=Material+Symbols+Outlined&icon_names=…,
+   en orden alfabético) y se reemplaza el .woff2. Los que trae hoy:
+   ac_unit add arrow_back arrow_downward arrow_forward arrow_upward autorenew
+   bar_chart barcode block calendar_month category check check_box
+   check_box_outline_blank check_circle checklist chevron_left chevron_right
+   clear close delete done done_all east edit error expand_less expand_more
+   filter_alt grid_view help history home inbox info insights inventory_2
+   kitchen label lightbulb list local_offer local_shipping location_on logout
+   menu more_vert move_to_inbox north_east notification_important notifications
+   open_in_new outbox package_2 pending person place playlist_add
+   playlist_add_check print qr_code refresh remove report_problem restaurant
+   schedule search sell shopping_bag sort south_east speed star storefront
+   swap_horiz sync task_alt today trending_down trending_flat trending_up tune
+   undo visibility visibility_off warehouse warning warning_amber */
 @font-face {
   font-family: 'Material Symbols Outlined';
   font-style: normal;

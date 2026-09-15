@@ -24,12 +24,12 @@ export function Entrar({ alEntrar }: { alEntrar: () => void | Promise<void> }) {
   };
 
   return (
-    <div className="respeta-bordes flex min-h-screen flex-col items-center justify-center">
+    <div className="respeta-bordes flex min-h-screen flex-col items-center justify-center py-6">
       <form onSubmit={mandar} className="tarjeta w-full max-w-sm p-6 shadow-sm">
         <div className="mb-6 flex flex-col items-center gap-2 text-center">
           <img src="/logo.png" alt="La Casita Deli" className="h-16 w-16 object-contain" />
           <h1 className="titulo text-2xl leading-tight">Inventario La Casita</h1>
-          <p className="text-sm text-on-surface-variant">Para ver qué no se vende y qué hay que resurtir</p>
+          <p className="text-sm text-on-surface-variant">Inventario, resurtido y movimiento, sin dinero</p>
         </div>
 
         <label className="etiqueta mb-1 block" htmlFor="usuario">Usuario</label>
@@ -42,7 +42,7 @@ export function Entrar({ alEntrar }: { alEntrar: () => void | Promise<void> }) {
           required
           value={usuario}
           onChange={e => setUsuario(e.target.value)}
-          className="mb-4 w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-4 py-3 text-base outline-none focus:border-primary"
+          className="campo toque mb-4"
         />
 
         <label className="etiqueta mb-1 block" htmlFor="contrasena">Contraseña</label>
@@ -54,17 +54,17 @@ export function Entrar({ alEntrar }: { alEntrar: () => void | Promise<void> }) {
           required
           value={contrasena}
           onChange={e => setContrasena(e.target.value)}
-          className="mb-5 w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-4 py-3 text-base outline-none focus:border-primary"
+          className="campo toque mb-5"
         />
 
         {error && <div className="mb-4"><Aviso texto={error} /></div>}
 
-        <button type="submit" disabled={ocupado} className="boton-lleno w-full">
+        <button type="submit" disabled={ocupado} className="boton-lleno toque w-full">
           {ocupado ? 'Entrando…' : <>Entrar <Icono nombre="arrow_forward" className="text-[18px]" /></>}
         </button>
 
         <p className="mt-5 text-center text-xs text-on-surface-variant">
-          Esta página es solo para ver. No cambia nada del sistema de la tienda.
+          Esta página no mueve inventario: lo único que puede hacer es pedir un resurtido, y ese lo ejecuta bodega con la TC52.
         </p>
       </form>
     </div>

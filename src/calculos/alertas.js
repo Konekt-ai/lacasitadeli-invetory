@@ -29,6 +29,7 @@ export const OPCIONES_ALERTAS = {
   sinMovimientoAlertaDias: 180,   // "estancado" a partir de este tramo
   entradasSinVentaDias: 30,       // llegó hace ≥ N días y no ha vendido nada desde entonces
   sobrestockCriticoDias: 180,     // sobrestock con cobertura de más de N días
+  sinCategoriaMinVentas30: 10,    // "sin categoría" solo si vende al menos N piezas en 30 días
   sinAltaUrgentePiezas: 10,       // sin alta con ≥ N piezas = prioridad alta
   parecidoNombreMin: 0.3,         // caja vs página: menos que esto es "nombre inconsistente"
   refrigerado: {
@@ -105,7 +106,10 @@ export function alertasDeProducto(p, opciones = {}) {
 
   // Catálogo: sin categoría útil (ABARROTES no cuenta). Lo "sin alta" ya tiene su
   // alerta y ni siquiera tiene categoría de caja: no se le suma esta.
-  if (p.alta && !p.esCocina && piezas > 0 && p.categoria === 'Sin categoría') {
+  // Medido en la tienda (2026-09-15): 11,499 de 11,834 productos con piezas son
+  // "ABARROTES" -> 9,428 alertas de este tipo, puro ruido. Solo vale la pena para
+  // lo que SÍ se vende (es lo que estorba en los análisis por categoría).
+  if (p.alta && !p.esCocina && p.categoria === 'Sin categoría' && num(p.vendidas?.d30) >= o.sinCategoriaMinVentas30) {
     agregar('sin_categoria', 'baja',
       'Sin categoría no entra en los análisis por categoría. Asígnale una en el Admin.');
   }

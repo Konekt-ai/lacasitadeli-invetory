@@ -17,6 +17,15 @@
   html {
     -webkit-text-size-adjust: 100%;
     background: theme('colors.background');
+    /* Letra más grande que el Admin: se lee de pie, con una mano, en el celular
+       (16 px) y todavía más cómoda en la compu (17.5 px). Todo lo demás va en rem
+       y crece parejo. */
+    font-size: 16px;
+  }
+  @media (min-width: 1024px) {
+    html {
+      font-size: 17.5px;
+    }
   }
   body {
     font-family: theme('fontFamily.body');
@@ -55,8 +64,58 @@
   .chip {
     @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium;
   }
+
+  /* ── Nuevas en la versión 2 ─────────────────────────────────────────── */
+
+  /* Rejilla de tarjetas: 1 por fila en celular, 2 en tablet, 3 en desktop.
+     La usan Inventario, Buscar, Resurtir y Alertas. */
+  .rejilla {
+    @apply grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3;
+  }
+  /* Número de piezas: grande, para leerse de un vistazo. */
+  .numero-grande {
+    @apply text-2xl font-bold leading-none tabular-nums lg:text-3xl;
+  }
+  /* Cualquier cosa que se toque con el dedo mide al menos 44 px. */
+  .toque {
+    @apply min-h-[44px];
+  }
+  /* Campo de texto normal (login, notas) */
+  .campo {
+    @apply w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-4 py-3
+           text-base text-on-surface outline-none focus:border-primary;
+  }
+  /* Campo redondo para buscar */
+  .campo-buscar {
+    @apply toque w-full rounded-full border border-outline-variant/70 bg-surface-container-lowest
+           py-2.5 pl-11 pr-11 text-base text-on-surface outline-none focus:border-primary;
+  }
+  /* Select con la misma pinta que los chips */
+  .seleccion {
+    @apply toque rounded-full border border-outline-variant/70 bg-surface-container-lowest
+           px-3 py-2 text-sm text-on-surface outline-none focus:border-primary;
+  }
+  /* Chip que se puede apretar (filtros). El estado presionado va en una clase
+     aparte (no en [aria-pressed]) para que las utilidades de color de un badge
+     puedan ganarle: misma especificidad, y las utilidades van después. */
+  .chip-boton {
+    @apply chip toque shrink-0 border border-outline-variant/70 bg-surface-container-lowest
+           px-3 py-2 text-sm text-on-surface-variant transition-colors;
+  }
+  .chip-presionado {
+    @apply border-primary bg-primary text-on-primary;
+  }
+  /* Encabezado de sección */
+  .seccion-titulo {
+    @apply etiqueta mb-2;
+  }
 }
 
 /* El scroll horizontal de las tarjetas, sin barra fea */
 .sin-barra::-webkit-scrollbar { display: none; }
 .sin-barra { scrollbar-width: none; }
+
+/* Al imprimir "mi lista" no van ni el encabezado ni la navegación */
+@media print {
+  .no-imprimir { display: none !important; }
+}

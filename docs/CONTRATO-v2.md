@@ -373,3 +373,42 @@ UTC del naive (`fechas.js`). La nota del mapa de calor: el día (o los dos días
   `ventasAreaLargo`, `ventasDia` y un producto solo en `catalogoCompleto`.
 - Playwright (`pruebas/celular.spec.ts` + `pruebas/desktop.spec.ts`): celular 390×844 y
   desktop 1280×800; cada módulo carga; en desktop 3 tarjetas por fila; sin "$".
+
+---
+
+## 10. Desviaciones respecto al contrato (lo que quedó distinto, y por qué)
+
+Anotadas al cerrar la versión 2 (2026-09-15), después de probar contra la base real.
+
+- **Alerta "sin categoría" solo para lo que se vende.** Regla: categoría final =
+  "Sin categoría" **y** `vendidas.d30 ≥ SIN_CATEGORIA_MIN_VENTAS_30` (default 10), sin
+  cocina y con alta. Medido en la tienda: 11,499 de 11,834 productos con piezas son
+  ABARROTES; con la regla del contrato salían 9,428 alertas (puro ruido).
+- **`GET /api/alertas` se topa.** Responde `cuantos` (total con ese filtro) y `alertas`
+  con como máximo `limite` (default 300, máx 1000), ordenadas por prioridad (alta →
+  baja) y, a igual prioridad, por piezas. Sin el tope "todas" eran 6 MB por el túnel.
+  El frontend lo dice: "Se muestran las 300 más importantes de N".
+- **`resumenDia.alertasUrgentes`** (prioridad alta) se agrega al contrato; el ítem
+  "Alertas" de la navegación muestra ese número, no el total.
+- **`snap.movimiento`** solo precalcula la combinación por defecto (30 días, toda la
+  tienda, sin cocina); las demás se calculan al pedirlas y se guardan en caché por
+  snapshot (`vistaMovimiento`).
+- **El proxy olvida la caché de pendientes** (30 s) cuando el admin acepta una
+  solicitud nueva, para que Resurtir la marque de inmediato.
+- **Shopify (sección 4.3 del prompt) NO se conectó.** `categoriaFuente` nunca es
+  `'shopify'`, `capacidades.shopify` es `false` y la alerta "nombre inconsistente" no se
+  genera. Requiere que el dueño cree la app "Invetory (solo lectura)" con
+  `read_products`; el motor ya acepta `datos.tiposShopify` cuando exista.
+- **No se guarda el snapshot en disco** para arrancar rápido (sección 4.6 del prompt):
+  el primer cálculo tarda ~15 s y la app ya avisa "estamos juntando la información".
+  `data/invetory.db` solo guarda las alertas descartadas.
+- **Tiempos reales (caja, 2026-09-15):** lote de 30 min ≈ 8.4 s de SQL (historial 3.5 ·
+  catálogo 2.2 · ventas largas 60/90/180 2.2 · ventas por día 0.45); el "completo" de
+  cada 6 h agrega 6.6 s (fases alterno/GTIN/PLU 4.5 + catálogo completo 2.2). El
+  snapshot se arma en 1.6 s con 19,470 productos y 60,190 del catálogo completo.
+- **Conteos reales** (vs. sección 4.4 del prompt): sin alta 2,071 (2,010 el 11-sep),
+  duplicados 414 (~400), sobrestock 1,154, sin movimiento 90+ 2,367, urgentes 672,
+  sin stock 309, bajo stock 130, descontinuados 0 en la caja (el dueño aún no marca
+  ninguno; en local se probó con 2 marcados en una copia del SQLite).
+- **`SIN_MOVIMIENTO_DIAS`** reemplaza a `DESCONTINUADO_DIAS` en el `.env` (se acepta el
+  nombre viejo). Nada en la app marca "descontinuado" por días.

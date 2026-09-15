@@ -23,6 +23,10 @@
 //   ventas por área de 30 días ........ 0.16 s
 //   ventas por área de 90 días ........ 0.53 s  (medido 2026-09-12; por eso va cada 30 min)
 //   ventas con existencia en 0 ........ 0.2 s   (movimientos_bodega, ~93 mil filas)
+//   ventas largas 60/90/180 (#vlargo) .. ver logs/app.log, paso 'ventas-largas' (v2, 2026-09-15)
+//   ventas por día de 90 días (#dias) .. ver logs/app.log, paso 'ventas-por-dia' (v2, 2026-09-15)
+//   catálogo completo (60 mil filas) ... ver logs/app.log, paso 'catalogo-completo' (v2, solo cada 6 h)
+//   movimientos de UN producto ......... TOP 20 por código, on demand (0.36 s medido con 4 consultas juntas)
 
 /** Lote rápido (cada 5 min): lo que cambia a cada rato. */
 export const LOTE_RAPIDO = `
@@ -89,14 +93,26 @@ SELECT GETDATE() AS ahora;
  *    última venta solo puede ir hacia adelante: lo de la ventana se mezcla encima
  *    de lo que ya está en memoria y las ventas viejas no cambian nunca.
  *
- * Devuelve: 0) historial por código  1) catálogo resuelto  2) tiempos por paso
- *          3) ventas por área de 90 días.
- * @param {{completo?: boolean, duplicadosDias?: number}} [opciones]
+ * Recordsets que devuelve, EN ESTE ORDEN (fuente.js los desarma por posición):
+ *   0) historial por código           {codigo, ultima, v120}
+ *   1) catálogo resuelto              {codigo, art_codigo, via, descripcion, categoria, marca}
+ *   2) tiempos por paso               {paso, ms}  (se anotan en logs/app.log)
+ *   3) ventas largas por área         {area, codigo, v60, v90, v180}   (#vlargo, 180 días)
+ *   4) ventas por día y área          {area, dia, codigo, piezas}      (#dias, VENTAS_DIA_DIAS=90)
+ *   5) catálogo COMPLETO de NovaCaja  {art_codigo, descripcion, categoria, marca}  SOLO con completo: true
+ * @param {{completo?: boolean, duplicadosDias?: number, ventasDiaDias?: number}} [opciones]
  */
-export function loteHistorial({ completo = false, duplicadosDias = 120 } = {}) {
+export function loteHistorial({ completo = false, duplicadosDias = 120, ventasDiaDias = 90 } = {}) {
   const fases = completo ? FASES_EXTRA : '';
   const ventana = Number(duplicadosDias) || 120;
   const filtroVentana = completo ? '' : `AND ps.FechaHora >= DATEADD(day,-${ventana},GETDATE())`;
+  // Ventana de las ventas por día: 90 por defecto; si en la caja #dias pasa de 4 s
+  // se baja a 30 desde el .env (VENTAS_DIA_DIAS) sin tocar código.
+  const diasVentasDia = Math.min(Math.max(Number(ventasDiaDias) || 90, 7), 180);
+  const catalogoCompleto = completo ? CATALOGO_COMPLETO : '';
+  const selectCatalogoCompleto = completo
+    ? '-- 5) catálogo completo (solo con completo: true)\nSELECT art_codigo, descripcion, categoria, marca FROM #cat;'
+    : '';
   return `
 SET NOCOUNT ON;
 DECLARE @t0 datetime2 = SYSDATETIME(), @t datetime2;
@@ -149,25 +165,50 @@ GROUP BY c.codigo
 OPTION (MAXDOP 1);
 INSERT INTO #ms VALUES ('catalogo-base', DATEDIFF(ms,@t,SYSDATETIME()));
 ${fases}
--- "Más vendidos" de 90 días, por área (caja del ticket -> área, join de 4 llaves).
--- Cuesta 0.53 s contra 0.16 s la de 30 días: por eso vive aquí (cada 30 min) y no
--- en el lote rápido (cada 5 min). Para un acumulado de 90 días, media hora de
--- retraso no cambia nada.
-CREATE TABLE #v90 (area nvarchar(50) COLLATE DATABASE_DEFAULT,
-                   codigo nvarchar(64) COLLATE DATABASE_DEFAULT, v90 decimal(18,3));
+-- Ventas LARGAS por área: 60 / 90 / 180 días en UNA pasada de 180 días (caja del
+-- ticket -> área, join de 4 llaves). Con 90 días costaba 0.3-0.5 s; con 180 se
+-- mide y queda en el log ('ventas-largas'). Vive aquí (cada 30 min) y no en el
+-- lote rápido: para un acumulado de meses, media hora de retraso no cambia nada.
+-- v60/v90 salen con CASE por ventana; v180 es la suma completa.
+CREATE TABLE #vlargo (area nvarchar(50) COLLATE DATABASE_DEFAULT,
+                      codigo nvarchar(64) COLLATE DATABASE_DEFAULT,
+                      v60 decimal(18,3), v90 decimal(18,3), v180 decimal(18,3));
 SET @t = SYSDATETIME();
-INSERT INTO #v90 (area, codigo, v90)
-SELECT m.area, ps.Codigo, SUM(ps.Cantidad)
+INSERT INTO #vlargo (area, codigo, v60, v90, v180)
+SELECT m.area, ps.Codigo,
+       SUM(CASE WHEN t.T_Fecha >= DATEADD(day,-60,GETDATE()) THEN ps.Cantidad ELSE 0 END),
+       SUM(CASE WHEN t.T_Fecha >= DATEADD(day,-90,GETDATE()) THEN ps.Cantidad ELSE 0 END),
+       SUM(ps.Cantidad)
 FROM dbo.TicketsPS ps WITH (NOLOCK)
 JOIN dbo.Tickets t WITH (NOLOCK)
   ON ps.FolTda_Codigo = t.FolTda_Codigo AND ps.FolEst_Codigo = t.FolEst_Codigo
  AND ps.FolDoc_Codigo = t.FolDoc_Codigo AND ps.FolConsecutivo = t.FolConsecutivo
 JOIN dbo.estacion_area_map m WITH (NOLOCK) ON m.est_codigo = t.FolEst_Codigo
-WHERE t.T_Fecha >= DATEADD(day,-90,GETDATE())
+WHERE t.T_Fecha >= DATEADD(day,-180,GETDATE())
   AND ps.Codigo IS NOT NULL AND ps.Codigo <> ''
 GROUP BY m.area, ps.Codigo
 OPTION (MAXDOP 1);
-INSERT INTO #ms VALUES ('ventas-90-dias', DATEDIFF(ms,@t,SYSDATETIME()));
+INSERT INTO #ms VALUES ('ventas-largas', DATEDIFF(ms,@t,SYSDATETIME()));
+
+-- Ventas POR DÍA y área de los últimos ${diasVentasDia} días (mapas de calor de
+-- Movimiento). Mismo join de 4 llaves + estacion_area_map; el día es la fecha del
+-- ticket (T_Fecha es datetime en hora CDMX, se recorta a date).
+CREATE TABLE #dias (area nvarchar(50) COLLATE DATABASE_DEFAULT, dia date,
+                    codigo nvarchar(64) COLLATE DATABASE_DEFAULT, piezas decimal(18,3));
+SET @t = SYSDATETIME();
+INSERT INTO #dias (area, dia, codigo, piezas)
+SELECT m.area, CAST(t.T_Fecha AS date), ps.Codigo, SUM(ps.Cantidad)
+FROM dbo.TicketsPS ps WITH (NOLOCK)
+JOIN dbo.Tickets t WITH (NOLOCK)
+  ON ps.FolTda_Codigo = t.FolTda_Codigo AND ps.FolEst_Codigo = t.FolEst_Codigo
+ AND ps.FolDoc_Codigo = t.FolDoc_Codigo AND ps.FolConsecutivo = t.FolConsecutivo
+JOIN dbo.estacion_area_map m WITH (NOLOCK) ON m.est_codigo = t.FolEst_Codigo
+WHERE t.T_Fecha >= DATEADD(day,-${diasVentasDia},GETDATE())
+  AND ps.Codigo IS NOT NULL AND ps.Codigo <> ''
+GROUP BY m.area, CAST(t.T_Fecha AS date), ps.Codigo
+OPTION (MAXDOP 1);
+INSERT INTO #ms VALUES ('ventas-por-dia', DATEDIFF(ms,@t,SYSDATETIME()));
+${catalogoCompleto}
 INSERT INTO #ms VALUES ('TOTAL', DATEDIFF(ms,@t0,SYSDATETIME()));
 
 -- 0) historial completo por código
@@ -176,10 +217,32 @@ SELECT codigo, ultima, v120 FROM #uv;
 SELECT codigo, art_codigo, via, descripcion, categoria, marca FROM #res;
 -- 2) tiempos
 SELECT paso, ms FROM #ms;
--- 3) ventas por área de 90 días
-SELECT area, codigo, v90 FROM #v90;
+-- 3) ventas largas por área (60/90/180 días)
+SELECT area, codigo, v60, v90, v180 FROM #vlargo;
+-- 4) ventas por día y área
+SELECT area, dia, codigo, piezas FROM #dias;
+${selectCatalogoCompleto}
 `;
 }
+
+// Catálogo COMPLETO de NovaCaja (solo para el buscador: "en catálogo de caja, sin
+// existencia contada"). Son ~60 mil artículos; la vista repite una fila por cada
+// código alterno, por eso el GROUP BY. Va a una #temp para poder medirlo y
+// devolverlo en su posición (recordset 5). Solo con `completo: true` (cada 6 h):
+// el catálogo no cambia a cada rato.
+const CATALOGO_COMPLETO = `
+CREATE TABLE #cat (art_codigo nvarchar(64) COLLATE DATABASE_DEFAULT,
+                   descripcion nvarchar(200) COLLATE DATABASE_DEFAULT,
+                   categoria nvarchar(200) COLLATE DATABASE_DEFAULT,
+                   marca nvarchar(200) COLLATE DATABASE_DEFAULT);
+SET @t = SYSDATETIME();
+INSERT INTO #cat (art_codigo, descripcion, categoria, marca)
+SELECT Art_Codigo, MIN(Art_Descripcion), MIN(Org_Descripcion), MIN(Mar_Nombre)
+FROM dbo.VArticulosUnificados WITH (NOLOCK)
+GROUP BY Art_Codigo
+OPTION (MAXDOP 1);
+INSERT INTO #ms VALUES ('catalogo-completo', DATEDIFF(ms,@t,SYSDATETIME()));
+`;
 
 // Fases 2 a 4: solo para los que no casaron por Art_Codigo. Cuestan ~4 s y en la
 // base real resuelven apenas 4 códigos más, por eso NO van en cada refresco.
@@ -299,4 +362,33 @@ export function loteRapido({ ventanaVentaDiariaDias = 14 } = {}) {
   // 45 días lo vendido en 30 y todo parecería vender menos de lo que vende.
   const dias = Math.max(30, ventana);
   return LOTE_RAPIDO.replace('@VENTANA', String(ventana)).replace('@DIAS', String(dias));
+}
+
+/**
+ * Últimos 20 movimientos físicos de UN producto (entradas, salidas, traslados,
+ * mermas, ajustes) para la ficha. On demand (la ruta lo pide con caché de 60 s).
+ *
+ * `area` es el ORIGEN de un traslado (ubicacion = destino) y `stock_despues` lo que
+ * quedó; las dos necesitan GRANT (scripts/crear-login-ro.sql). Si el login de la
+ * caja todavía no lo tiene, se pide la versión `sinArea` (las dos salen NULL) y
+ * fuente.js lo avisa una vez. Sin `notas`: traen folios de ticket.
+ * No hay índice por fecha ni por código: ~93 mil filas, un escaneo corto.
+ * @param {string} codigo
+ * @param {{sinArea?: boolean, tope?: number}} [opciones]
+ * @returns {{sql: string, parametros: Record<string, string>}}
+ */
+export function consultaMovimientosProducto(codigo, { sinArea = false, tope = 20 } = {}) {
+  const n = Math.min(Math.max(Number(tope) || 20, 1), 100);
+  const columnas = sinArea
+    ? 'fecha, tipo, motivo, cantidad, ubicacion, NULL AS area, stock_antes, NULL AS stock_despues'
+    : 'fecha, tipo, motivo, cantidad, ubicacion, area, stock_antes, stock_despues';
+  const sql = `
+SET NOCOUNT ON;
+SELECT TOP ${n} ${columnas}
+FROM dbo.movimientos_bodega WITH (NOLOCK)
+WHERE codigo_barras = @c
+ORDER BY fecha DESC
+OPTION (MAXDOP 1);
+`;
+  return { sql, parametros: { c: String(codigo ?? '').trim().slice(0, 64) } };
 }

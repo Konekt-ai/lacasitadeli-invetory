@@ -9,7 +9,8 @@
 //
 // Rendimiento: corre cada 5 min en la caja con ~18,000 productos y ~100,000 filas
 // de ventas por día. Todo son pasadas lineales; lo único caro es buscarDuplicados
-// (indexado, ver duplicados.js). Medido con datos sintéticos: ~1.5 s en total.
+// (indexado, ver duplicados.js). Medido con datos sintéticos (18k productos, 100k
+// filas de ventas por día, 60k de catálogo completo): 0.75–1.0 s en total.
 
 import { ahoraNaive, diasEntre, naiveAIso } from './fechas.js';
 import { esCocina } from './cocina.js';
@@ -496,8 +497,11 @@ export function armarSnapshot(datos, opciones = {}) {
   for (const c of datos.catalogoCompleto ?? []) {
     const artCodigo = String(c.art_codigo ?? c.Art_Codigo ?? c.codigo ?? '').trim();
     if (!artCodigo || catalogoCompleto.has(artCodigo)) continue;
+    // Nombres y categorías limpiados IGUAL que el catálogo normal (limpiarNombre /
+    // limpiarCategoria), para que el buscador no enseñe "$" ni "CON IVA".
     const nombre = limpiarNombre(c.descripcion ?? c.Art_Descripcion ?? '') || artCodigo;
     const caja = categoriaLimpia(c.categoria ?? c.Org_Descripcion ?? null);
+    const marcaCruda = c.marca ?? c.Mar_Nombre ?? null;
     const ov = overrides.size ? overrides.get(artCodigo) : undefined;
     const propia = ov?.categoria ? categoriaLimpia(ov.categoria) : null;
     catalogoCompleto.set(artCodigo, {
@@ -505,7 +509,7 @@ export function armarSnapshot(datos, opciones = {}) {
       nombre,
       nombreNormalizado: normalizar(nombre),
       categoria: resolverCategoria({ propia, tipoShopify: null, caja }).categoria,
-      marca: c.marca ?? c.Mar_Nombre ? limpiarNombre(c.marca ?? c.Mar_Nombre) || null : null,
+      marca: marcaCruda ? limpiarNombre(marcaCruda) || null : null,
       foto: ov?.foto ?? null,
     });
   }
@@ -600,6 +604,7 @@ export function armarSnapshot(datos, opciones = {}) {
   const resumenDia = {
     urgentes: 0, piezasAMover: 0, sinStock: 0, bajoStock: 0, sobrestock: 0,
     sinMovimiento90: 0, descontinuados: 0, alertas: snap.alertas.length,
+    alertasUrgentes: snap.alertas.filter(a => a.prioridad === 'alta').length,
     conPiezas: conPiezas.length, piezas: snap.resumen.piezasTotales,
   };
   for (const p of productos) {

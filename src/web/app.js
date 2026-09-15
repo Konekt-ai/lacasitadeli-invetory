@@ -12,7 +12,7 @@ import { crearRutas } from './rutas.js';
 import { usuarioDe } from './auth.js';
 
 // Rutas de la página (las maneja React); todo lo demás es 404.
-const PANTALLAS = ['/', '/sin-venta', '/resurtir', '/mas-vendidos', '/buscar', '/producto'];
+const PANTALLAS = ['/', '/inventario', '/resurtir', '/movimiento', '/alertas', '/buscar', '/producto'];
 const ENTRAR = '/entrar';
 
 export function crearApp() {

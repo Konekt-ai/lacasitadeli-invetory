@@ -104,7 +104,7 @@ export type Umbrales = {
 
 export type ResumenDia = {
   urgentes: number; piezasAMover: number; sinStock: number; bajoStock: number; sobrestock: number;
-  sinMovimiento90: number; descontinuados: number; alertas: number;
+  sinMovimiento90: number; descontinuados: number; alertas: number; alertasUrgentes: number;
 };
 
 export type CoberturaSucursal = { area: string; medianaDias: number | null; productosQueVenden: number; urgentes: number };
@@ -197,6 +197,8 @@ export type Alerta = {
 
 export type RespuestaAlertas = {
   conteo: { todas: number; urgentes: number; codigos: number; caja: number; catalogo: number; inventario: number; descartadas: number };
+  /** Cuántas hay con este filtro (la lista trae como máximo `limite`, las más importantes). */
+  cuantos: number;
   alertas: Alerta[];
 };
 

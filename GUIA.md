@@ -1,11 +1,15 @@
 # Guía rápida — Inventario La Casita
 
-Esta página es **solo para ver**. No cambia nada del sistema de la tienda: no se
-puede editar, ni borrar, ni mover inventario desde aquí.
+Esta página enseña **todo el inventario en piezas** (nunca en dinero): qué hay y
+dónde, qué hay que subir al anaquel, cómo se está vendiendo y qué hay que revisar.
+
+**Lo único que puede hacer** es **pedir un resurtido**: eso crea una tarea que el de
+bodega ve en la TC52 y hace físicamente. No se puede editar, borrar ni mover
+inventario desde aquí.
 
 ## Cómo entrar
 
-1. Abre en el celular la dirección que te llegó por correo
+1. Abre en el celular (o en la computadora) la dirección que te llegó por correo
    (se ve así: `https://algo-algo-algo.trycloudflare.com`).
 2. Escribe tu **usuario** y tu **contraseña**.
 3. Listo. La sesión dura 12 horas; después vuelve a pedir la contraseña.
@@ -14,87 +18,172 @@ puede editar, ni borrar, ni mover inventario desde aquí.
 > la computadora de la tienda, la dirección cambia sola). Llega un correo nuevo con
 > la dirección al día. Guarda siempre el último correo.
 
-Arriba dice **"Actualizado a las 14:30"**: esa es la hora en que se tomaron los
-datos. El botón de la flecha circular vuelve a preguntar.
+Arriba siempre está: el nombre del módulo, **"Actualizado a las 14:30"** (la hora en
+que se tomaron los datos), el **buscador** (nombre o código: encuentra cualquier
+producto, hasta los que solo existen en la caja), el botón de la flecha circular
+(volver a preguntar) y **Salir**.
+
+Abajo, en el celular (arriba, en la computadora), están los cuatro módulos:
+**Inventario · Resurtir · Movimiento · Alertas**.
 
 ---
 
-## 1. Sin venta (la pantalla que abre primero)
+## 1. Inventario (la pantalla que abre primero)
 
-Aquí está lo que **tiene piezas en la tienda y no se está vendiendo**. Arriba hay
-tarjetas; al tocar una, la lista de abajo cambia.
+- **Resumen del día**: ocho tarjetas (urgentes, piezas a mover, sin stock, bajo
+  stock, sobrestock, sin movimiento 90+, descontinuados, alertas). Tocar una
+  aplica ese filtro a la lista.
+- **Cobertura por sucursal**: "42 d de cobertura" = con lo que se vende, a la
+  mitad de los productos de Casita 1 les alcanza para 42 días. Tocar una sucursal
+  filtra por esa área.
+- **Filtros**: área, **condiciones** (se pueden combinar: por ejemplo "Sobrestock" +
+  "Sin movimiento 90+ días"), prioridad, categoría y orden. "Incluir contados en 0"
+  y "Ver cocina" abren la lista completa. Los filtros se quedan en la dirección de
+  la página: si abres una ficha y regresas, la lista sigue igual.
+- **La lista**: 60 productos por página ("Ver más" trae los siguientes). En la
+  computadora salen tres por fila.
 
-| Tarjeta | Qué son |
-|---|---|
-| **Descontinuados** | Tienen piezas y llevan 90 días o más sin venderse (o nunca se han vendido). Son los que hay que sacar, rematar o dejar de comprar. |
-| **Lentos** | Sí se venden, pero su última venta fue hace entre 30 y 90 días. |
-| **Posible código duplicado** | Están contados con un código y se venden con otro. La tarjeta dice con cuál: *"Se vende como 00987339 KINDER JOY"*. No están parados: es el mismo producto con el código mal capturado. Hay que unificarlos. |
-| **Sin alta en caja** | La TC52 los contó, pero la caja no conoce ese código, así que **no se pueden cobrar bien** (se cobran como genéricos). No son descontinuados: les falta darlos de alta. |
-| **Nuevos, aún sin venta** | Llegaron hace menos de 30 días y todavía no se venden. Es pronto para juzgarlos. |
+Cada tarjeta trae: foto, nombre, código, categoría, **piezas por área** (con el
+color de cada área; "—" quiere decir *nunca se ha contado ahí*), total de piezas,
+piezas por día, última venta, última entrada, rotación y sus **badges**.
 
-En cada producto ves:
+### Qué significa cada badge
 
-- las **piezas por área**, con el color de siempre (Bodega verde, Casita 1 azul…);
-- **última venta**: *"hace 143 días"* o *"Nunca se ha vendido"*;
-- **última entrada**: cuándo llegó o cuándo lo surtieron al anaquel.
+| Badge | Qué es | Qué hacer |
+|---|---|---|
+| **Sin stock** (rojo) | Se vende y en esa sucursal hay 0 | Surtirlo hoy |
+| **Bajo stock** (ámbar) | Con lo que se vende, alcanza para menos de 7 días | Surtirlo pronto |
+| **Sobrestock** (morado) | Alcanza para más de 120 días (o no se vende y hay 24+ piezas) | No comprar más |
+| **Más vendido** (verde) | Está entre los 50 que más piezas venden en 30 días | Cuidar que no falte |
+| **Lento** (gris) | Su última venta fue hace entre 30 y 90 días | Vigilarlo |
+| **Sin movimiento 30 / 60 / 90 / 180+ días** (gris) | Lleva esos días sin venderse (o desde que se contó, si nunca ha vendido) | Decidir: promoción, remate o descontinuar (en el Admin) |
+| **Nuevo, sin venta** (azul) | Se contó por primera vez hace menos de 30 días y todavía no vende | Esperar; ¿está exhibido? |
+| **Descontinuado** (negro) | **Lo marcó el dueño en el Admin.** No es lo mismo que "sin movimiento" | No se pide resurtido; sacar lo que quede |
+| **Posible código duplicado** (naranja) | Está contado con un código y se vende con otro ("Se vende como 00987339 KINDER JOY") | Unificar el código en la TC52 |
+| **Sin alta en caja** (rojo, contorno) | La TC52 lo contó, pero la caja no conoce ese código: no se cobra bien | Darlo de alta en NovaCaja (Admin → Inventario) |
+| **Desfasado: cuéntalo** (rojo, contorno) | El sistema dice 0 y se sigue vendiendo | Contarlo con la TC52 (ver abajo) |
 
-Los filtros de abajo de las tarjetas sirven para ver **un área sola** o solo los de
-**90+ días**, y el botón de la derecha cambia el orden (por piezas o por días).
+**Prioridad**: **alta** = sin stock, alcanza para menos de 2 días o desfasado;
+**media** = bajo stock; **baja** = el resto.
 
 ---
 
 ## 2. Resurtir
 
-Lo que hay que subir al anaquel **hoy**, según lo que se está vendiendo en cada
-caja en los últimos 14 días.
+*Qué mover, desde dónde, hacia dónde y cuántas piezas.*
 
-- **Urgente** (rojo): se acabó o alcanza para menos de 2 días.
-- **Desfasado: cuéntalo** (rojo): el sistema dice **0** pero se sigue vendiendo.
-  Ese 0 es falso (ver "Inventario desfasado" abajo): **no lo pidas**, cuéntalo
-  con la TC52.
-- **Bajo** (café): alcanza para menos de una semana.
-- **Se vende pero no está contado**: se vende ahí, pero nadie lo ha contado en esa
-  área con la TC52, así que no se sabe cuánto queda.
+- **Tarjetas**: urgentes, piezas a mover, transferencias sugeridas (hay en
+  Bodega), sin respaldo en bodega (hay que comprarlo) y la sucursal más urgente.
+- **Filtros**: **Urgente hoy** (alcanza para menos de 2 días), **Próximos 3 días**,
+  **Próximos 7 días**; Sin stock / Bajo stock; sucursal; categoría; solo prioridad
+  alta; ver cocina; ver lo no contado.
+- **Cada tarjeta** dice: para qué sucursal, **cuántos días alcanza** (en grande), las
+  piezas ahí, las piezas por día, las piezas en Bodega, la acción en texto y las
+  **piezas a mover** (ya sugeridas; se pueden cambiar).
 
-Cada renglón dice qué hacer:
+Las acciones en texto:
 
-- **"Surte 8 de Bodega (hay 40)"** → hay en Bodega, súbelo.
-- **"Pedir al proveedor"** → no hay en Bodega.
-- **"No está contado en Casita 2: cuéntalo con la TC52"** → primero hay que contarlo.
+- **"Mover 8 de Bodega (hay 40)"** → hay en Bodega, súbelo.
+- **"Sin respaldo en bodega: hay que comprarlo"** → no hay en Bodega.
+- **"No está contado en Casita 2: cuéntalo con la TC52"** → primero hay que contar.
 - **"Cuéntalo con la TC52: el sistema dice 0 y se sigue vendiendo"** → está
   desfasado; abajo dice cuántas se vendieron sin existencia y desde cuándo.
 
-**La palomita ✓** es tu lista de pendientes: se guarda **solo en tu celular** (el
-de al lado no la ve) y se borra sola a las 12 horas. Sirve para ir tachando
-mientras surtes.
+### Solicitar resurtido (la única acción de verdad)
 
-Por defecto no sale la comida hecha en la casa (baguettes, paella, empanadas):
-esa no se resurte del almacén. Si la quieres ver, prende la casilla.
+1. Toca **Solicitar resurtido** en la tarjeta (o en la ficha del producto).
+2. Revisa **hacia** dónde va (la sucursal), **desde** dónde sale (Bodega) y las
+   **piezas**. La app propone cuántas según lo que se vende y lo que hay en Bodega.
+   Puedes poner una nota.
+3. Confirma: *"Se pedirá mover 8 pzas de Bodega a Casita 2. El de bodega lo verá
+   en la TC52. ¿Continuar?"*
+4. La tarjeta queda como **"Solicitado · pendiente en TC52"**.
+
+Qué pasa después: el de bodega ve la solicitud en la pestaña **Resurtir** de la
+TC52, mueve las piezas y registra el traslado escaneando. **En ese momento la
+solicitud se cierra sola** (pasa a "Hecha"). Si ya hay una solicitud pendiente del
+mismo producto para la misma sucursal, la app lo avisa y **no la duplica**.
+
+Desde aquí no se cancelan ni se marcan hechas: eso se hace en la TC52 o en el
+panel Admin (Bodega → Resurtido). Si el panel admin no está encendido, el botón
+no aparece y la app lo dice.
+
+### Mi lista (en este teléfono)
+
+"Agregar a mi lista" arma una lista personal con palomitas para ir tachando
+mientras surtes, y un botón **Imprimir**. Se guarda **solo en este teléfono**: el
+de al lado no la ve y el de bodega tampoco. Para que bodega lo sepa está
+"Solicitar resurtido".
+
+### Historial de resurtido
+
+Pendientes, hechas y canceladas, con quién la pidió, cuándo, y cuándo la cerró la
+TC52 (o por qué se canceló). Son las mismas que ve el Admin.
 
 ---
 
-## 3. Más vendidos
+## 3. Movimiento
 
-Los productos que más piezas movieron en los últimos **7, 30 o 90 días**, y
-cuántas quedan en la tienda. Se puede ver toda la tienda o solo Casita 1 /
-Casita 2.
+*Comportamiento del inventario medido en piezas, sin datos de dinero.*
 
-Si abajo del código sale en rojo **"Desfasado en Casita 1: 256 vendidas en 0"**,
-el "quedan" de ese producto no es de fiar: hay que contarlo.
+- **7 / 30 / 90 días**, por sucursal o toda la tienda; "incluir cocina" apagado
+  (la comida hecha en casa no tiene inventario).
+- **Piezas vendidas** en 7, 30 y 90 días con el **% contra el mismo número de días
+  justo antes** (↑ subió, ↓ bajó).
+- **Más vendidos por piezas** (top 10, con cuántas quedan).
+- **Categorías con más movimiento** y **comparativo por sucursal** (barras).
+- **Aceleran ventas / Bajan ventas**: los 5 que más subieron o bajaron contra el
+  periodo anterior (mínimo 10 piezas, para no contar ruido).
+- **Mapas de calor**: categoría × día de la semana, sucursal × día de la semana y
+  el calendario del periodo. Arriba dice, por ejemplo, *"Sábado y domingo
+  concentran el mayor movimiento"*.
+- **Ranking de rotación**: rotación = piezas vendidas en 30 días entre las piezas
+  que hay. Toca una columna para ordenar.
 
 ---
 
-## 4. Buscar
+## 4. Alertas
 
-Escribe el nombre o el código y te dice **dónde hay piezas** en las 6 áreas,
-cuántas están apartadas por pedidos de la página, cuándo se vendió por última vez
-y cuánto se ha vendido.
+Cosas que hay que revisar, explicadas en sencillo. Arriba, cuántas hay y cuántas
+urgentes; filtros **Todas · Urgentes · Códigos · Caja · Catálogo · Inventario**.
+Solo hay dos botones, y los dos hacen algo real: **Ver producto** (abre la ficha)
+y **Descartar** (queda guardado quién y cuándo; se puede **Deshacer**; "Ver
+descartadas" las enseña).
 
-En la ficha, ojo con la diferencia:
+| Alerta | Qué significa | Qué hacer |
+|---|---|---|
+| **Posible código duplicado** (urgente) | Se cuenta con un código y se vende con otro | Revisar si es el mismo producto y corregir el código en la TC52 |
+| **No está dado de alta en caja** (urgente) | Hay piezas contadas, pero la caja no conoce el código: no se cobra bien | Darlo de alta en NovaCaja (Admin → Inventario → Dar de alta) |
+| **Inventario desfasado** (urgente) | El sistema dice 0 y se sigue vendiendo | Contarlo con la TC52 |
+| **Posible ubicación incorrecta** | Parece refrigerado (quesos, carnes, congelados) y está contado en Bodega o en el anaquel | Verificar dónde está físicamente |
+| **Entradas sin ventas** | Llegó hace 30 días o más y no ha vendido ni una pieza | ¿Está exhibido? ¿Se vende con otro código? |
+| **Sobrestock crítico** | Con lo que se vende, alcanza para más de 6 meses | No comprar más |
+| **Estancado demasiado tiempo** | Sin movimiento 180+ días y no está descontinuado | Decidir si se descontinúa (en el Admin) o se promociona |
+| **Producto sin categoría** | Se vende (10+ piezas al mes) y no tiene categoría útil (ABARROTES no cuenta) | Ponerle categoría en el Admin |
 
-- **0 piezas** = se contó y no hay.
-- **"sin contar"** = nadie lo ha contado ahí nunca. No es lo mismo: puede haber.
-- Si arriba sale un aviso rojo de **inventario desfasado**, ese 0 es falso.
+Cuando hay miles, la página enseña las **300 más importantes** (primero las
+urgentes y las de más piezas) y dice cuántas hay en total: filtra por grupo para
+ver las demás.
+
+---
+
+## La ficha de un producto
+
+Al tocar cualquier producto: foto grande, nombre, código, categoría, badges,
+**piezas en tienda**, apartadas (pedidos de la página web), piezas por día,
+cobertura, rotación, última venta, última entrada y **tendencia** 7/30/90.
+
+- **Dónde hay**: todas las áreas, con la diferencia que importa: **0 piezas** = se
+  contó y no hay; **"sin contar"** = nadie lo ha contado ahí nunca (puede haber).
+- **Unidades vendidas** en 7/30/90 días y por área en los últimos 14.
+- **Para surtir el anaquel**: por sucursal, cuánto alcanza y el botón "Solicitar
+  resurtido".
+- **Últimos movimientos**: entradas, salidas, traslados, mermas y ajustes
+  registrados en bodega (sin dinero).
+- **Solicitudes de resurtido** de ese producto.
+
+Si el producto está **Descontinuado**, lo dice en un recuadro negro con la fecha en
+que se marcó en el Admin, y **no** ofrece pedir resurtido.
 
 ---
 
@@ -115,7 +204,7 @@ los últimos 14 días y nadie lo ha vuelto a contar, lo marca como **desfasado**
 **Cómo se arregla:** contar el producto en esa área con la TC52 (o registrar la
 entrada / el traslado cuando se surte). En unos 5 minutos deja de salir como
 desfasado. Y para que no vuelva a pasar: **todo lo que se sube al anaquel se
-registra en la TC52**.
+registra en la TC52** (las solicitudes de resurtido ayudan justo a eso).
 
 ---
 
@@ -125,6 +214,9 @@ registra en la TC52**.
   puede abrir cualquiera que resurta.
 - Los números salen del **conteo de la TC52** y de los **tickets de la caja**. Si
   algo no cuadra, casi siempre es que ese producto no se ha contado en esa área.
-- Los cambios de la TC52 se ven aquí en unos **5 minutos**.
+- Los cambios de la TC52 se ven aquí en unos **5 minutos**; las ventas largas y los
+  mapas de calor, en 30.
+- **Descontinuado** solo lo pone el dueño en el Admin (Inventario → producto →
+  Descontinuado). Aquí solo se muestra.
 - ¿Olvidaste tu contraseña? No hay forma de recuperarla desde la página: hay que
   ponerla de nuevo en la computadora de la tienda.

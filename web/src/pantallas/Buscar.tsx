@@ -1,66 +1,98 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { api } from '../api';
-import { Aviso, Cargando, Icono, Vacio, numero } from '../componentes/basicos';
+import { api, type Producto } from '../api';
+import { Cargando, ErrorConReintento, Icono, Vacio, numero, usarConsulta, usarNavegacion } from '../componentes/basicos';
 import { usarDatos } from '../componentes/usarDatos';
 import { TarjetaProducto } from '../componentes/TarjetaProducto';
 
+type Resultado = { q: string; cuantos: number; deCatalogo: number; productos: Producto[] };
+
+/**
+ * Buscador: encuentra cualquier producto (contado, vendido o solo en el
+ * catálogo de la caja). Lo que se busca vive en la URL (?q=…): el buscador del
+ * encabezado manda aquí, y al volver atrás se conserva.
+ */
 export function Buscar() {
-  const [texto, setTexto] = useState('');
+  const { ir } = usarNavegacion();
+  const consulta = usarConsulta();
+  const q = (consulta.get('q') ?? '').trim();
+  const [texto, setTexto] = useState(q);
   const caja = useRef<HTMLInputElement>(null);
-  const corto = texto.trim().length < 2;
 
   useEffect(() => { caja.current?.focus(); }, []);
 
+  // Si llegan con otra búsqueda desde el encabezado, el campo se pone al día
+  // (sin comerse el espacio que la persona acaba de escribir).
+  useEffect(() => { setTexto(t => (t.trim() === q ? t : q)); }, [q]);
+
+  // Lo que se escribe pasa a la URL (sin historial) con una pausa para no
+  // pedir por cada letra.
+  useEffect(() => {
+    const limpio = texto.trim();
+    if (limpio === q) return undefined;
+    const t = setTimeout(() => ir(`/buscar${limpio ? `?q=${encodeURIComponent(limpio)}` : ''}`, { reemplazar: true }), 300);
+    return () => clearTimeout(t);
+  }, [texto, q, ir]);
+
+  const corto = q.length < 2;
   const traer = useCallback(
-    () => (corto ? Promise.resolve({ q: texto, cuantos: 0, productos: [] }) : api.buscar(texto.trim())),
-    [texto, corto],
+    (): Promise<Resultado> => (corto ? Promise.resolve({ q, cuantos: 0, deCatalogo: 0, productos: [] }) : api.buscar(q)),
+    [q, corto],
   );
-  const { datos, cargando, error, calculando, reintentar } = usarDatos(traer, [texto], { retrasoMs: 300 });
+  const { datos, cargando, error, calculando, reintentar } = usarDatos(traer, [q]);
   const productos = datos?.productos ?? [];
 
   return (
     <div className="space-y-4">
+      <div>
+        <h2 className="titulo text-2xl leading-tight">Buscar</h2>
+        <p className="text-sm text-on-surface-variant">Cualquier producto: contado, vendido o solo en el catálogo de la caja.</p>
+      </div>
+
       <div className="relative">
-        <Icono nombre="search" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-on-surface-variant" />
+        <label htmlFor="buscar-q" className="sr-only">Nombre o código del producto</label>
+        <Icono nombre="search" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[22px] text-on-surface-variant" />
         <input
+          id="buscar-q"
           ref={caja}
           value={texto}
           onChange={e => setTexto(e.target.value)}
           placeholder="Nombre o código del producto"
-          aria-label="Buscar producto"
           inputMode="search"
-          className="w-full rounded-full border border-outline-variant/70 bg-surface-container-lowest py-3 pl-11 pr-12 text-base outline-none focus:border-primary"
+          autoComplete="off"
+          enterKeyHint="search"
+          className="campo-buscar py-3 text-lg"
         />
         {texto && (
           <button
             type="button"
             onClick={() => setTexto('')}
             aria-label="Limpiar"
-            className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center text-on-surface-variant"
+            className="absolute right-0 top-0 flex h-full w-12 items-center justify-center text-on-surface-variant"
           >
-            <Icono nombre="close" className="text-[20px]" />
+            <Icono nombre="close" className="text-[22px]" />
           </button>
         )}
       </div>
 
-      {error && (
-        <div className="space-y-2">
-          <Aviso texto={error} />
-          <button type="button" onClick={reintentar} className="boton-suave w-full py-3">Volver a intentar</button>
-        </div>
-      )}
+      {error && <ErrorConReintento texto={error} reintentar={reintentar} />}
       {calculando && <Cargando texto="Estamos juntando la información del inventario. Tarda unos segundos." />}
 
       {corto ? (
-        <Vacio icono="search" titulo="Busca un producto" detalle="Escribe parte del nombre o el código de barras para ver dónde hay piezas." />
+        <Vacio icono="search" titulo="Busca un producto" detalle="Escribe al menos 2 letras del nombre o el código de barras." />
       ) : cargando && !productos.length && !error ? (
         <Cargando />
-      ) : !productos.length && datos ? (
+      ) : datos && !productos.length ? (
         <Vacio icono="search" titulo="No se encontró nada" detalle="Revisa cómo está escrito o prueba con el código." />
-      ) : (
+      ) : datos && (
         <>
-          <p className="text-sm text-on-surface-variant">{numero(datos?.cuantos ?? 0)} resultados</p>
-          <div className="space-y-2">
+          <p className="flex items-center gap-2 text-sm text-on-surface-variant" aria-live="polite">
+            <span>
+              <strong className="text-on-surface">{numero(datos.cuantos)}</strong> resultados
+              {datos.deCatalogo > 0 ? ` (${numero(datos.deCatalogo)} solo en catálogo)` : ''}
+            </span>
+            {cargando && <span className="h-3 w-3 animate-spin rounded-full border-2 border-outline-variant border-t-primary" />}
+          </p>
+          <div className="rejilla">
             {productos.map(p => <TarjetaProducto key={p.codigo} p={p} />)}
           </div>
         </>

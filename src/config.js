@@ -51,6 +51,20 @@ export const config = {
     dist: path.join(RAIZ, 'dist'),
     logs: texto('CARPETA_LOGS') || path.join(RAIZ, 'logs'),
     sqliteFotos: texto('SQLITE_FOTOS', 'C:\\Users\\LACASITA\\Desktop\\lacasitadeli-admin\\apps\\api\\lacasita.db'),
+    // Estado propio de la app (alertas descartadas): data/invetory.db. Es el ÚNICO
+    // archivo que esta app escribe; se crea solo en la caja.
+    datos: texto('CARPETA_DATOS') || path.join(RAIZ, 'data'),
+  },
+
+  // API del panel admin (lacasitadeli-admin). Solo se usa para las solicitudes de
+  // resurtido (proxy) y para saber si el admin está vivo. En la caja los dos
+  // corren en la misma máquina: 127.0.0.1:3002. Otra dirección solo tiene
+  // sentido en desarrollo (revisarConfig avisa).
+  admin: {
+    api: texto('ADMIN_API', 'http://127.0.0.1:3002').replace(/\/+$/, ''),
+    timeoutMs: entero('ADMIN_TIMEOUT_MS', 10_000),
+    // Cada cuánto se vuelve a preguntar si el admin contesta (capacidades.solicitudes)
+    revisarMin: numero('ADMIN_REVISAR_MIN', 5),
   },
 
   sql: {
@@ -76,7 +90,11 @@ export const config = {
   },
 
   umbrales: {
-    descontinuadoDias: entero('DESCONTINUADO_DIAS', 90),
+    // "Sin movimiento" a partir de estos días sin venta (antes se llamaba
+    // DESCONTINUADO_DIAS; se acepta el nombre viejo). OJO: esto NO marca nada
+    // como "Descontinuado": eso solo lo decide el dueño en el Admin.
+    sinMovimientoDias: entero('SIN_MOVIMIENTO_DIAS', entero('DESCONTINUADO_DIAS', 90)),
+    descontinuadoDias: entero('SIN_MOVIMIENTO_DIAS', entero('DESCONTINUADO_DIAS', 90)),
     lentoDias: entero('LENTO_DIAS', 30),
     nuevoDias: entero('NUEVO_DIAS', 30),
     coberturaUrgenteDias: numero('COBERTURA_URGENTE_DIAS', 2),
@@ -87,6 +105,29 @@ export const config = {
     // Cuántos días atrás se buscan ventas registradas con existencia en 0. La tabla
     // no tiene índice por fecha: 90 cuesta lo mismo que 30 y dice bien "desde cuándo".
     desfaseDias: entero('DESFASE_DIAS', 90),
+    // Sobrestock: alcanza para más de estos días (con al menos estas piezas)
+    sobrestockDias: numero('SOBRESTOCK_DIAS', 120),
+    sobrestockMin: entero('SOBRESTOCK_MIN', 24),
+    // "Más vendido": los N primeros por piezas de 30 días (sin cocina)
+    topMasVendidos: entero('TOP_MAS_VENDIDOS', 50),
+    // Alerta "estancado": sin movimiento desde este tramo (30/60/90/180)
+    sinMovimientoAlertaDias: entero('SIN_MOVIMIENTO_ALERTA_DIAS', 180),
+    // Alerta "entradas sin ventas": llegó hace estos días y no ha vendido nada
+    entradasSinVentaDias: entero('ENTRADAS_SIN_VENTA_DIAS', 30),
+    // Alerta "sin categoría": solo si vende al menos estas piezas en 30 días (en
+    // la tienda casi todo es "ABARROTES"; sin este piso salían 9 mil alertas)
+    sinCategoriaMinVentas30: entero('SIN_CATEGORIA_MIN_VENTAS_30', 10),
+    // Ventas por día (mapas de calor de Movimiento): cuántos días atrás. Si en la
+    // caja #dias tarda más de 4 s, aquí se baja a 30.
+    ventasDiaDias: entero('VENTAS_DIA_DIAS', 90),
+  },
+
+  // Alerta "posible ubicación incorrecta": qué parece refrigerado y en qué áreas
+  // no debería estar contado.
+  refrigerado: {
+    categorias: lista('REFRIGERADO_CATEGORIAS', ['QUESOS Y LACTEOS', 'CARNES', 'LACTEOS', 'CONGELADOS']),
+    palabras: lista('REFRIGERADO_PALABRAS', ['REFRIGERAD', 'FROZEN', 'CONGELAD']),
+    areasSospechosas: lista('REFRIGERADO_AREAS_SOSPECHOSAS', ['Bodega', 'Casita 1', 'Casita 2']),
   },
 
   areas: {
@@ -137,5 +178,11 @@ export function revisarConfig(c = config) {
   // "localhost" tampoco vale: en Windows se va a IPv6 (::1) y los scripts de la
   // caja, que buscan 127.0.0.1:PUERTO con netstat, no verían la app arriba.
   if (c.host !== '127.0.0.1') problemas.push(`HOST=${c.host}: la app debe escuchar solo en 127.0.0.1 (ni "localhost" ni "::1").`);
+  // En la caja el admin corre en la misma máquina. Otra dirección en producción
+  // casi seguro es un .env copiado de desarrollo (Tailscale), y las solicitudes
+  // de resurtido se irían a otra tienda.
+  if (c.entorno === 'production' && c.admin.api !== 'http://127.0.0.1:3002') {
+    problemas.push(`ADMIN_API=${c.admin.api}: en la caja el admin está en http://127.0.0.1:3002.`);
+  }
   return problemas;
 }

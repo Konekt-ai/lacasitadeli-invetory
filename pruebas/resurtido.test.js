@@ -13,14 +13,17 @@ describe('calcularResurtido', () => {
     expect(r.coberturaDias).toBe(6);
   });
 
-  it('se acabó en el anaquel: urgente, aunque quede en Bodega', () => {
+  it('se acabó en el anaquel: urgente, aunque quede en Bodega → "Mover N de Bodega (hay N)"', () => {
     const r = calcular({
       codigo: 'x', area: 'Casita 1', vendidasVentana: 70, stock: 0,
       respaldos: [{ area: 'Bodega', stock: 40 }],
     });
     expect(r.estado).toBe('urgente');
     expect(r.sugerido).toBe(35);
-    expect(r.accion.texto).toBe('Surte 35 de Bodega (hay 40)');
+    expect(r.accion.tipo).toBe('surtir');
+    expect(r.accion.texto).toBe('Mover 35 de Bodega (hay 40)');
+    expect(r.accion.surtirDeRespaldo).toBe(35);
+    expect(r.respaldo).toEqual({ area: 'Bodega', disponible: 40 });
   });
 
   it('menos de 2 días de cobertura también es urgente', () => {
@@ -45,9 +48,10 @@ describe('calcularResurtido', () => {
     expect(limite.estado).toBe('bajo');
   });
 
-  it('NO está contado no es lo mismo que cero: hay que contarlo, no pedirlo', () => {
+  it('NO está contado no es lo mismo que cero: hay que contarlo, no comprarlo', () => {
     const r = calcular({ codigo: 'x', area: 'Casita 2', vendidasVentana: 30, stock: null });
     expect(r.estado).toBe('sin_conteo');
+    expect(r.accion.tipo).toBe('contar');
     expect(r.accion.texto).toBe('No está contado en Casita 2: cuéntalo con la TC52');
     expect(r.disponible).toBeNull();
   });
@@ -57,41 +61,53 @@ describe('calcularResurtido', () => {
     expect(r.estado).toBe('urgente');
   });
 
-  it('sin nada en Bodega: pedir al proveedor', () => {
+  it('sin nada en Bodega: "Sin respaldo en bodega: hay que comprarlo" (tipo pedir, sin decir a quién)', () => {
     const r = calcular({
       codigo: 'x', area: 'Casita 1', vendidasVentana: 70, stock: 0,
       respaldos: [{ area: 'Bodega', stock: 0 }],
     });
     expect(r.accion.tipo).toBe('pedir');
-    expect(r.accion.texto).toBe('Pedir al proveedor');
+    expect(r.accion.texto).toBe('Sin respaldo en bodega: hay que comprarlo');
     expect(r.accion.nota).toBe('No hay en Bodega');
+    expect(r.respaldo).toEqual({ area: 'Bodega', disponible: 0 });
   });
 
-  it('Bodega sin conteo: se avisa aparte, pero la acción sigue siendo pedir', () => {
+  it('Bodega sin conteo: se avisa aparte, pero la acción sigue siendo comprarlo', () => {
     const r = calcular({
       codigo: 'x', area: 'Casita 1', vendidasVentana: 70, stock: 0,
       respaldos: [{ area: 'Bodega', stock: null }],
     });
     expect(r.accion.tipo).toBe('revisar_respaldo');
+    expect(r.accion.texto).toBe('Sin respaldo en bodega: hay que comprarlo');
     expect(r.accion.nota).toContain('no lo tiene contado');
+    expect(r.respaldo).toEqual({ area: 'Bodega', disponible: null });
   });
 
-  it('si en Bodega no alcanza, se surte lo que hay y se pide el resto', () => {
+  it('si en Bodega no alcanza, se mueve lo que hay y el resto se compra', () => {
     const r = calcular({
       codigo: 'x', area: 'Casita 1', vendidasVentana: 70, stock: 0,
       respaldos: [{ area: 'Bodega', stock: 5 }],
     });
     expect(r.accion.tipo).toBe('surtir_parcial');
-    expect(r.accion.texto).toBe('Surte 5 de Bodega (hay 5)');
-    expect(r.accion.nota).toBe('Faltan 30: pídelos al proveedor');
+    expect(r.accion.texto).toBe('Mover 5 de Bodega (hay 5)');
+    expect(r.accion.nota).toBe('Faltan 30: en Bodega no hay más, hay que comprarlos');
+    expect(r.accion.surtirDeRespaldo).toBe(5);
   });
 
-  it('lo apartado en Bodega tampoco se puede surtir', () => {
+  it('lo apartado en Bodega tampoco se puede mover', () => {
     const r = calcular({
       codigo: 'x', area: 'Casita 1', vendidasVentana: 70, stock: 0,
       respaldos: [{ area: 'Bodega', stock: 40, apartado: 38 }],
     });
-    expect(r.accion.texto).toBe('Surte 2 de Bodega (hay 2)');
+    expect(r.accion.texto).toBe('Mover 2 de Bodega (hay 2)');
+  });
+
+  it('con varios respaldos se surte del que más tenga disponible', () => {
+    const r = calcular({
+      codigo: 'x', area: 'Casita 1', vendidasVentana: 70, stock: 0,
+      respaldos: [{ area: 'Bodega', stock: 3 }, { area: 'Bodega 2', stock: 50 }],
+    });
+    expect(r.accion.texto).toBe('Mover 35 de Bodega 2 (hay 50)');
   });
 
   it('lo que no se vende no entra a la lista aunque esté en cero', () => {
@@ -104,9 +120,10 @@ describe('calcularResurtido', () => {
   it('bien surtido = sin acción', () => {
     const r = calcular({ codigo: 'x', area: 'Casita 1', vendidasVentana: 14, stock: 50 });
     expect(r.accion.tipo).toBe('ninguna');
+    expect(r.accion.texto).toBe('Está bien surtido');
   });
 
-  it('desfasado: el 0 es falso, hay que contarlo en vez de pedirlo (GHIRARDELLI)', () => {
+  it('desfasado: el 0 es falso, hay que contarlo en vez de comprarlo (GHIRARDELLI)', () => {
     const r = calcular({
       codigo: '747599409943', area: 'Casita 1', vendidasVentana: 84, stock: 0,
       desfase: { piezas: 252, desde: new Date(Date.UTC(2026, 7, 2, 12, 19)) },
@@ -124,6 +141,22 @@ describe('calcularResurtido', () => {
   it('un desfase viejo de algo que ya no se vende no lo mete a la lista', () => {
     const r = calcular({ codigo: 'x', area: 'Casita 1', vendidasVentana: 0, stock: 0, desfase: { piezas: 4, desde: null } });
     expect(r.estado).toBe('ok');
+  });
+
+  it('ningún texto de acción habla de proveedores ni de dinero', () => {
+    const casos = [
+      { stock: 0, respaldos: [{ area: 'Bodega', stock: 40 }] },
+      { stock: 0, respaldos: [{ area: 'Bodega', stock: 5 }] },
+      { stock: 0, respaldos: [{ area: 'Bodega', stock: 0 }] },
+      { stock: 0, respaldos: [{ area: 'Bodega', stock: null }] },
+      { stock: null },
+      { stock: 50 },
+      { stock: 0, desfase: { piezas: 9, desde: null } },
+    ];
+    for (const c of casos) {
+      const r = calcular({ codigo: 'x', area: 'Casita 1', vendidasVentana: 70, ...c }, { ahora: AHORA });
+      expect(`${r.accion.texto} ${r.accion.nota ?? ''}`).not.toMatch(/proveedor|pedir|pídelos|surte|precio|costo|\$|pesos/i);
+    }
   });
 
   it('primero lo urgente y lo que más se vende', () => {

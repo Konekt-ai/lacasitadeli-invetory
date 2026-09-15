@@ -35,6 +35,13 @@ const DEBEN_FUNCIONAR = [
   ['códigos de caja', 'SELECT TOP 1 codigo, codigo_base, unidades, tipo FROM dbo.codigos_producto WITH (NOLOCK)'],
   ['apartados', 'SELECT TOP 1 codigo_barras, ubicacion, cantidad, activa FROM dbo.reservas_bodega WITH (NOLOCK)'],
   ['movimientos (inventario desfasado)', 'SELECT TOP 1 codigo_barras, tipo, cantidad, ubicacion, stock_antes, motivo, fecha FROM dbo.movimientos_bodega WITH (NOLOCK)'],
+  // Versión 2 (2026-09-15): la ficha enseña los últimos 20 movimientos con origen
+  // del traslado y stock después. Si esto falla, corre el GRANT nuevo de
+  // scripts/crear-login-ro.sql (la app funciona igual, solo sin esos dos datos).
+  ['movimientos: área (origen) y stock después (GRANT de la v2)', 'SELECT TOP 1 area, stock_despues FROM dbo.movimientos_bodega WITH (NOLOCK)'],
+  // El buscador cae al catálogo COMPLETO (60 mil filas agrupadas por Art_Codigo).
+  ['catálogo completo (GROUP BY Art_Codigo)', 'SELECT TOP 5 Art_Codigo, MIN(Art_Descripcion) AS d, MIN(Org_Descripcion) AS o, MIN(Mar_Nombre) AS m FROM dbo.VArticulosUnificados WITH (NOLOCK) GROUP BY Art_Codigo OPTION (MAXDOP 1)'],
+  ['ventas por día (CAST de T_Fecha a date)', 'SELECT TOP 1 CAST(T_Fecha AS date) AS dia FROM dbo.Tickets WITH (NOLOCK)'],
   ['tabla temporal', 'CREATE TABLE #prueba (a int); INSERT INTO #prueba VALUES (1); SELECT a FROM #prueba;'],
 ];
 
