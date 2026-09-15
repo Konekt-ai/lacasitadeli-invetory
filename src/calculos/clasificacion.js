@@ -1,26 +1,30 @@
-// ¿Por qué este producto tiene piezas paradas? (la pantalla principal)
+// ¿Por qué este producto tiene piezas paradas? (una sola "clase" por producto)
 //
 // Medido contra la base real el 2026-09-11: de 11,238 productos con piezas, 2,723
 // nunca se han vendido en 4.5 años de historial. Pero "nunca vendido" casi nunca
 // significa "no se vende":
 //   · 2,010 no existen en NovaCaja  -> no se pueden cobrar con su código (se cobran
-//     como genéricos). Eso es un problema de alta, no un descontinuado.
+//     como genéricos). Eso es un problema de alta, no de movimiento.
 //   · ~400 se venden con OTRO código mal capturado (Kinder Joy, Starbucks…).
 //   · ~1,200 acaban de llegar (entrada de menos de 30 días).
-// Lo que queda sí son descontinuados de verdad (Pepsi Wild Cherry, Evian 1 L…).
+// Lo que queda sí lleva mucho tiempo sin moverse (Pepsi Wild Cherry, Evian 1 L…),
+// pero eso NO lo vuelve "descontinuado": Descontinuado solo es lo que el dueño
+// marca en el Admin (product_overrides.descontinuado = 1, ver condiciones.js).
+// Por eso la clase de antes 'descontinuado' ahora se llama 'sin_movimiento'.
 //
-// Por eso el orden importa: se revisa en este orden y se queda en el PRIMER grupo
+// Se conserva por compatibilidad (la v2 usa `condiciones[]`, varios badges a la
+// vez). El orden importa: se revisa en este orden y se queda en el PRIMER grupo
 // que cumpla.
 
 import { diasEntre } from './fechas.js';
 
-export const CLASES = ['sin_alta', 'duplicado_probable', 'nuevo', 'descontinuado', 'lento', 'activo'];
+export const CLASES = ['sin_alta', 'duplicado_probable', 'nuevo', 'sin_movimiento', 'lento', 'activo'];
 
 export const ETIQUETAS = {
   sin_alta: 'Sin alta en caja',
   duplicado_probable: 'Posible código duplicado',
   nuevo: 'Nuevo, aún sin venta',
-  descontinuado: 'Descontinuado',
+  sin_movimiento: 'Sin movimiento 90+ días',
   lento: 'Lento',
   activo: 'Activo',
 };
@@ -35,7 +39,8 @@ export const ETIQUETAS = {
  * @property {object|null} [duplicado]   resultado de buscarDuplicados()
  *
  * @typedef {Object} OpcionesClasificacion
- * @property {number} descontinuadoDias  90 por defecto
+ * @property {number} [sinMovimientoDias]  90 por defecto (antes `descontinuadoDias`; se acepta el nombre viejo)
+ * @property {number} [descontinuadoDias]  nombre viejo de sinMovimientoDias
  * @property {number} lentoDias          30
  * @property {number} nuevoDias          30
  * @property {Date}   [ahora]            instante de referencia (naive CDMX)
@@ -48,7 +53,8 @@ export const ETIQUETAS = {
  * @returns {{clase: string, diasSinVenta: number|null, diasDesdeEntrada: number|null, nuncaVendido: boolean}}
  */
 export function clasificar(p, opciones) {
-  const { descontinuadoDias = 90, lentoDias = 30, nuevoDias = 30, ahora } = opciones ?? {};
+  const { lentoDias = 30, nuevoDias = 30, ahora } = opciones ?? {};
+  const sinMovimientoDias = opciones?.sinMovimientoDias ?? opciones?.descontinuadoDias ?? 90;
   const diasSinVenta = p.ultimaVenta ? diasEntre(p.ultimaVenta, ahora) : null;
   const diasDesdeEntrada = p.ultimaEntrada ? diasEntre(p.ultimaEntrada, ahora) : null;
   const diasDesdePrimeraVez = p.primeraVez ? diasEntre(p.primeraVez, ahora) : null;
@@ -68,7 +74,7 @@ export function clasificar(p, opciones) {
   //    Bodega al anaquel: DR. PEPPER STRAWBERRIES CREAM salió de Bodega y "entró"
   //    a Casita 1 el mismo día (13-ago), y DUNCAN HINES —144 días sin venderse—
   //    aparecía como "nuevo" por un surtido interno de hace 14 días. Con eso se
-  //    escondían justo los descontinuados que el dueño quiere ver.
+  //    escondían justo los estancados que el dueño quiere ver.
   //
   //    La fecha buena es `creado`: la primera vez que ese producto se contó con la
   //    TC52 (el producto es nuevo en la tienda, no solo cambió de anaquel).
@@ -77,8 +83,8 @@ export function clasificar(p, opciones) {
     return { clase: 'nuevo', ...base };
   }
 
-  // 4. Descontinuado: nunca vendido o sin venta desde hace mucho.
-  if (nuncaVendido || diasSinVenta >= descontinuadoDias) return { clase: 'descontinuado', ...base };
+  // 4. Sin movimiento: nunca vendido o sin venta desde hace mucho.
+  if (nuncaVendido || diasSinVenta >= sinMovimientoDias) return { clase: 'sin_movimiento', ...base };
 
   // 5. Lento: vendió, pero hace rato.
   if (diasSinVenta >= lentoDias) return { clase: 'lento', ...base };

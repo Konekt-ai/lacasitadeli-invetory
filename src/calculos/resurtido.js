@@ -2,7 +2,7 @@
 //
 // Idea: lo que se vende en Casita 1 y Casita 2 (según la CAJA del ticket) contra
 // lo que la TC52 tiene contado ahí. Si alcanza para menos de unos días, hay que
-// surtirlo de Bodega; si tampoco hay en Bodega, hay que pedirlo.
+// moverlo de Bodega; si tampoco hay en Bodega, hay que comprarlo.
 //
 // Cuidado con el caso "no está contado": que NO exista la fila en inventario_bodega
 // NO es lo mismo que cero. Sin fila no sabemos cuánto hay, así que no se puede
@@ -10,8 +10,11 @@
 // 845 productos que se venden y nunca se contaron ahí — casi todos comida hecha.)
 //
 // Y el caso "desfasado": contado en 0 pero se sigue vendiendo (el sistema descontó
-// ventas cuando ya no había). Ese 0 es falso: pedirlo al proveedor con el anaquel
-// lleno es justo el error. Lo que toca también es contarlo.
+// ventas cuando ya no había). Ese 0 es falso: comprarlo con el anaquel lleno es
+// justo el error. Lo que toca también es contarlo.
+//
+// Los textos son ACCIONES ("Mover 32 de Bodega (hay 40)"), nunca datos
+// administrativos: aquí no se dice a quién se le compra ni cuánto cuesta.
 
 import { fechaCorta } from './fechas.js';
 
@@ -83,6 +86,8 @@ export function calcularResurtido(e, opciones = {}) {
     disponible,
     coberturaDias: coberturaDias === null ? null : Math.round(coberturaDias * 10) / 10,
     sugerido,
+    // De dónde se surte y cuánto hay disponible ahí (null = Bodega no lo tiene contado).
+    respaldo,
     accion: armarAccion({ estado, sugerido, respaldo, area: e.area, stock: e.stock, desfase: e.desfase, ahora }),
   };
 }
@@ -110,31 +115,36 @@ function armarAccion({ estado, sugerido, respaldo, area, stock, desfase, ahora }
   const areaRespaldo = respaldo?.area ?? 'Bodega';
   const hay = respaldo?.disponible;
 
-  // Sin fila en Bodega = nunca se contó ahí. La acción útil sigue siendo pedirlo,
+  // Sin fila en Bodega = nunca se contó ahí. La acción útil sigue siendo comprarlo,
   // pero se avisa aparte por si alguien quiere ir a ver al fondo.
   if (hay === null || hay === undefined) {
     return {
       tipo: 'revisar_respaldo',
-      texto: 'Pedir al proveedor',
+      texto: 'Sin respaldo en bodega: hay que comprarlo',
       nota: `${areaRespaldo} no lo tiene contado: vale la pena revisar ahí`,
       surtirDeRespaldo: 0,
     };
   }
   if (hay <= 0) {
-    return { tipo: 'pedir', texto: 'Pedir al proveedor', nota: `No hay en ${areaRespaldo}`, surtirDeRespaldo: 0 };
+    return {
+      tipo: 'pedir',
+      texto: 'Sin respaldo en bodega: hay que comprarlo',
+      nota: `No hay en ${areaRespaldo}`,
+      surtirDeRespaldo: 0,
+    };
   }
   const surtir = Math.min(sugerido, hay);
   if (surtir < sugerido) {
     return {
       tipo: 'surtir_parcial',
-      texto: `Surte ${surtir} de ${areaRespaldo} (hay ${hay})`,
-      nota: `Faltan ${sugerido - surtir}: pídelos al proveedor`,
+      texto: `Mover ${surtir} de ${areaRespaldo} (hay ${hay})`,
+      nota: `Faltan ${sugerido - surtir}: en ${areaRespaldo} no hay más, hay que comprarlos`,
       surtirDeRespaldo: surtir,
     };
   }
   return {
     tipo: 'surtir',
-    texto: `Surte ${surtir} de ${areaRespaldo} (hay ${hay})`,
+    texto: `Mover ${surtir} de ${areaRespaldo} (hay ${hay})`,
     nota: null,
     surtirDeRespaldo: surtir,
   };

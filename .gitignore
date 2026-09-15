@@ -25,3 +25,6 @@ Desktop.ini
 .DS_Store
 .vscode/
 .idea/
+
+# Estado propio de la app (alertas descartadas): se crea en la caja
+data/
