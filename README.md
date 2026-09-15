@@ -176,12 +176,25 @@ Por SSH, sin tocar nada del admin:
 ```
 cd C:\Users\LACASITA\Desktop\lacasitadeli-invetory
 git pull
-npm ci --omit=dev
 scripts\iniciar-app.bat
 ```
 
 `iniciar-app.bat` mata **solo** lo que esté en el puerto 3010 y vuelve a
 levantar la app. El túnel sigue igual, así que **la dirección no cambia**.
+
+**Solo si cambió `package-lock.json`** hace falta `npm ci --omit=dev`, y OJO:
+con la app corriendo **falla** (`EPERM` sobre `better_sqlite3.node`, que el
+proceso tiene abierto) y deja `node_modules` a medias. Primero detén la app y
+luego instala:
+
+```
+for /f "tokens=2 delims=," %p in ('tasklist /fi "imagename eq invetory-node.exe" /fo csv /nh') do taskkill /f /pid %~p
+npm ci --omit=dev
+scripts\iniciar-app.bat
+```
+
+(El vigilante la levantaría solo en menos de 2 minutos, pero con `node_modules`
+a medias no arranca: por eso el orden importa.)
 
 > **Cajas instaladas antes del 2026-09-15 (versión 2):** la ficha del producto
 > lee `movimientos_bodega.area` y `stock_despues`, así que `inventory_ro` necesita
