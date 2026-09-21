@@ -25,12 +25,15 @@ type Tarjeta = {
 const TARJETAS: Tarjeta[] = [
   { id: 'urgentes', titulo: 'Urgentes', detalle: () => 'prioridad alta', tono: 'alerta', filtro: { prioridad: 'alta', condiciones: [] } },
   { id: 'piezasAMover', titulo: 'Piezas a mover', detalle: () => 'de Bodega al anaquel · ver Resurtir', tono: 'normal', ruta: '/resurtir' },
-  { id: 'sinStock', titulo: 'Sin stock', detalle: () => 'se vende y hay 0', tono: 'alerta', filtro: { prioridad: '', condiciones: ['sin_stock'] } },
+  // "Agotado" y "Falta en anaquel" eran una sola tarjeta ("Sin stock") y el jefe
+  // veía productos con 200 piezas ahí: estaban en 0 en Casita 1 y las 200 en
+  // Casita 2. Ahora cada una dice lo que es.
+  { id: 'agotados', titulo: 'Agotados', detalle: () => 'se vende y no hay en ninguna área', tono: 'alerta', filtro: { prioridad: '', condiciones: ['agotado'] } },
+  { id: 'sinStock', titulo: 'Falta en anaquel', detalle: () => 'hay 0 en la sucursal, pero sí hay en otra área', tono: 'alerta', filtro: { prioridad: '', condiciones: ['sin_stock'] } },
   { id: 'bajoStock', titulo: 'Bajo stock', detalle: e => `menos de ${e?.umbrales?.coberturaBajaDias ?? 7} días`, tono: 'aviso', filtro: { prioridad: '', condiciones: ['bajo_stock'] } },
   { id: 'sobrestock', titulo: 'Sobrestock', detalle: e => `más de ${e?.umbrales?.sobrestockDias ?? 120} días`, tono: 'normal', filtro: { prioridad: '', condiciones: ['sobrestock'] } },
   { id: 'sinMovimiento90', titulo: 'Sin movimiento 90+', detalle: () => 'días sin venta', tono: 'normal', filtro: { prioridad: '', condiciones: ['sin_movimiento_90'] } },
   { id: 'descontinuados', titulo: 'Descontinuados', detalle: () => 'marcados en el Admin', tono: 'negro', filtro: { prioridad: '', condiciones: ['descontinuado'] } },
-  { id: 'alertas', titulo: 'Alertas', detalle: () => 'ver el módulo de alertas', tono: 'aviso', ruta: '/alertas' },
 ];
 
 const mismoFiltro = (f: ValoresFiltros, t: Tarjeta) =>

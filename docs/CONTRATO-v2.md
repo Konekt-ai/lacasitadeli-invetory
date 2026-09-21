@@ -101,7 +101,8 @@ Un producto puede tener varias. Ids, reglas y textos:
 
 | id | Regla (defaults por variable de entorno) | Texto del badge | Color |
 |---|---|---|---|
-| `sin_stock` | se vende en un área de venta (`ventaDiaria[area] > 0`), está contado ahí y `disponible ≤ 0` | Sin stock | rojo `bg-error text-on-error` |
+| `agotado` | se vende en un área de venta, está contado ahí con `disponible ≤ 0` y **no hay disponible en ninguna otra área contada** (Bodega incluida) | Agotado | rojo `bg-error text-on-error` |
+| `sin_stock` | se vende en un área de venta (`ventaDiaria[area] > 0`), está contado ahí, `disponible ≤ 0` y **sí hay en otra área** (hay que moverlas). Cambio del 2026-09-21: antes `sin_stock` cubría los dos casos y el jefe veía "Sin stock" en productos con 200 piezas en otra área | Falta en anaquel (el badge dice el área: "Falta en Casita 1") | rojo `bg-error text-on-error` |
 | `bajo_stock` | se vende, contado, `0 < cobertura < COBERTURA_BAJA_DIAS=7` | Bajo stock | ámbar `bg-secondary-fixed text-on-secondary-fixed` |
 | `sobrestock` | `piezas ≥ SOBRESTOCK_MIN=24` y (`coberturaDias > SOBRESTOCK_DIAS=120` o no se vende en 30 días) | Sobrestock | morado `bg-[#ede9fe] text-[#4c1d95]` |
 | `mas_vendidos` | top `TOP_MAS_VENDIDOS=50` por `vendidas.d30`, sin cocina | Más vendido | verde `bg-primary-fixed text-on-primary-fixed` |
@@ -115,7 +116,13 @@ Un producto puede tener varias. Ids, reglas y textos:
 
 `ETIQUETAS_CONDICION` exporta id → texto. `COLORES_CONDICION` vive en el frontend.
 
-**Prioridad**: `alta` si `sin_stock` o alguna área de venta con `cobertura < COBERTURA_URGENTE_DIAS=2`
+`calcularCondiciones` devuelve además `faltaEn: string[]` (sucursales donde se vende y hay 0 con
+conteo real) y `hayEn: [{area, piezas}]` (áreas contadas con disponible > 0, de más a menos).
+`productoJson` los manda tal cual y la tarjeta arma la frase *"Hay 0 en Casita 1 y se vende ahí.
+Sí hay 202 en Casita 2: hay que moverlas"*. `resumenDia` trae `agotados` y `sinStock` por separado;
+la tarjeta "Alertas" del resumen se quitó (el módulo Alertas ya trae su número en la barra).
+
+**Prioridad**: `alta` si `agotado`, `sin_stock` o alguna área de venta con `cobertura < COBERTURA_URGENTE_DIAS=2`
 o `desfasado`; `media` si `bajo_stock`; `baja` el resto.
 
 **Números**: `rotacion = d30 / max(piezas,1)` (2 decimales); `tendencia.dN = (dN − anteriorN) / anteriorN × 100`

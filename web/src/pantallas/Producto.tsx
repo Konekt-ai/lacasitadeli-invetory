@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { api, type Estado, type ProductoDetalle, type Solicitud } from '../api';
-import { BadgePrioridad, Badges } from '../componentes/Badge';
+import { BadgePrioridad, Badges, etiquetasDe } from '../componentes/Badge';
+import { FraseFalta } from '../componentes/TarjetaProducto';
 import {
   Aviso, Cargando, Dato, ErrorConReintento, Foto, Icono, Seccion, Tendencia, Vacio, Volver,
   decimal, fechaCorta, numero, textoHace, usarNavegacion,
@@ -98,7 +99,7 @@ export function Producto({ codigo, estado }: { codigo: string; estado: Estado | 
               {p.marca ? ` · ${p.marca}` : ''}{p.esCocina ? ' · Cocina' : ''}
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Badges condiciones={p.condiciones} max={20} grande />
+              <Badges condiciones={p.condiciones} max={20} grande etiquetas={etiquetasDe(p)} />
               <BadgePrioridad prioridad={p.prioridad} />
             </div>
           </div>
@@ -153,6 +154,7 @@ export function Producto({ codigo, estado }: { codigo: string; estado: Estado | 
             </button>
           </div>
         )}
+        <FraseFalta p={p} />
         {p.desfase && <div className="mt-3"><Aviso texto={`Inventario desfasado. ${p.desfase.texto}`} /></div>}
         {!p.alta && (
           <div className="mt-3">

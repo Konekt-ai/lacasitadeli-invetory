@@ -220,7 +220,7 @@ describe('armarSnapshot v2: overrides, categorías, números por producto', () =
 
   it('el resumen del día cuadra con las condiciones (sin cocina ni códigos genéricos)', () => {
     expect(snap.resumenDia).toEqual({
-      urgentes: 2, piezasAMover: 32, sinStock: 0, bajoStock: 2, sobrestock: 4,
+      urgentes: 2, piezasAMover: 32, agotados: 0, sinStock: 0, bajoStock: 2, sobrestock: 4,
       sinMovimiento90: 2, descontinuados: 1, alertas: 12, alertasUrgentes: 4, conPiezas: 10, piezas: 1549,
     });
   });

@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Producto } from '../api';
-import { BadgePrioridad, Badges } from './Badge';
+import { BadgePrioridad, Badges, etiquetasDe } from './Badge';
 import { ChipArea, Foto, Icono, decimal, fechaCorta, numero, textoHace, usarAreas, usarNavegacion } from './basicos';
 
 /**
@@ -67,9 +67,11 @@ export function TarjetaProducto({ p, area, nota }: { p: Producto; area?: string;
       )}
 
       <span className="mt-2 flex flex-wrap items-center gap-1.5">
-        <Badges condiciones={p.condiciones} max={4} />
+        <Badges condiciones={p.condiciones} max={4} etiquetas={etiquetasDe(p)} />
         <BadgePrioridad prioridad={p.prioridad} />
       </span>
+
+      <FraseFalta p={p} />
 
       {p.descontinuado && (
         <span className="mt-2 block text-sm font-medium text-on-surface">
@@ -91,6 +93,27 @@ export function TarjetaProducto({ p, area, nota }: { p: Producto; area?: string;
 
       {nota}
     </button>
+  );
+}
+
+/**
+ * Una frase que explica el "0": dónde falta, dónde sí hay y qué hacer. Sin esto,
+ * "Sin stock" junto a "202 piezas" no se entendía (queja del jefe, 2026-09-17).
+ */
+export function FraseFalta({ p }: { p: Producto }) {
+  if (!p.faltaEn?.length) return null;
+  const donde = p.faltaEn.join(' y ');
+  const agotado = p.condiciones.includes('agotado');
+  const hay = (p.hayEn ?? []).map(h => `${numero(h.piezas)} en ${h.area}`).join(', ');
+  return (
+    <span className="mt-2 flex items-start gap-1.5 rounded-lg bg-error-container px-2.5 py-1.5 text-sm text-on-error-container">
+      <Icono nombre="warning" className="mt-0.5 shrink-0 text-[16px]" />
+      <span>
+        {agotado
+          ? <>Se vende en <strong>{donde}</strong> y no hay en ninguna área: <strong>hay que comprarlo</strong>.</>
+          : <>Hay <strong>0 en {donde}</strong> y se vende ahí. Sí hay {hay}: <strong>hay que moverlas</strong>.</>}
+      </span>
+    </span>
   );
 }
 

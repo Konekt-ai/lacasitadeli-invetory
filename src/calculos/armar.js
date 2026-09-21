@@ -396,6 +396,8 @@ export function armarSnapshot(datos, opciones = {}) {
 
     const c = calcularCondiciones(p, opcionesCondiciones);
     p.condiciones = c.condiciones;
+    p.faltaEn = c.faltaEn;
+    p.hayEn = c.hayEn;
     p.prioridad = c.prioridad;
     p.tramoSinMovimiento = c.tramoSinMovimiento;
     p.diasSinMovimiento = c.diasSinMovimiento;
@@ -602,7 +604,7 @@ export function armarSnapshot(datos, opciones = {}) {
 
   // ── Resumen del día (las tarjetas de Inventario; cuadran con sus filtros) ──
   const resumenDia = {
-    urgentes: 0, piezasAMover: 0, sinStock: 0, bajoStock: 0, sobrestock: 0,
+    urgentes: 0, piezasAMover: 0, agotados: 0, sinStock: 0, bajoStock: 0, sobrestock: 0,
     sinMovimiento90: 0, descontinuados: 0, alertas: snap.alertas.length,
     alertasUrgentes: snap.alertas.filter(a => a.prioridad === 'alta').length,
     conPiezas: conPiezas.length, piezas: snap.resumen.piezasTotales,
@@ -611,6 +613,7 @@ export function armarSnapshot(datos, opciones = {}) {
     if (!visible(p)) continue;
     const c = p.condiciones;
     if (p.prioridad === 'alta') resumenDia.urgentes += 1;
+    if (c.includes('agotado')) resumenDia.agotados += 1;
     if (c.includes('sin_stock')) resumenDia.sinStock += 1;
     if (c.includes('bajo_stock')) resumenDia.bajoStock += 1;
     if (c.includes('sobrestock')) resumenDia.sobrestock += 1;

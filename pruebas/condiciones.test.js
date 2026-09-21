@@ -21,17 +21,71 @@ const calcular = (extra, o = {}) => calcularCondiciones(producto(extra), { ...op
 const condiciones = (extra, o) => calcular(extra, o).condiciones;
 
 describe('calcularCondiciones — por área de venta', () => {
-  it('sin stock: se vende ahí, está contado y no queda nada disponible', () => {
+  it('agotado: se vende ahí, está contado, no queda nada y no hay en otra área', () => {
     const r = calcular({ porArea: [{ area: 'Casita 1', cantidad: 0, apartado: 0, v14: 14 }] });
-    expect(r.condiciones).toContain('sin_stock');
+    expect(r.condiciones).toContain('agotado');
     expect(r.condiciones).not.toContain('bajo_stock');
     expect(r.prioridad).toBe('alta');
     expect(r.coberturaDias).toBe(0);
   });
 
+  it('agotado vs falta en anaquel: la diferencia es si HAY en otra área (queja del jefe)', () => {
+    // HUBBA BUBBA: 0 en Casita 1 (donde se vende) y 202 en Casita 2 → falta en anaquel, hay que moverlas.
+    const hubba = calcular({
+      piezas: 202,
+      porArea: [
+        { area: 'Casita 1', cantidad: 0, apartado: 0, v14: 14 },
+        { area: 'Casita 2', cantidad: 202, apartado: 0, v14: 0 },
+        { area: 'Bodega', cantidad: 0, apartado: 0, v14: 0 },
+      ],
+    });
+    expect(hubba.condiciones).toContain('sin_stock');
+    expect(hubba.condiciones).not.toContain('agotado');
+    expect(hubba.faltaEn).toEqual(['Casita 1']);
+    expect(hubba.hayEn).toEqual([{ area: 'Casita 2', piezas: 202 }]);
+    expect(hubba.prioridad).toBe('alta');
+    // Nada en ninguna área contada → agotado: hay que comprarlo.
+    const nada = calcular({
+      piezas: 0,
+      porArea: [
+        { area: 'Casita 1', cantidad: 0, apartado: 0, v14: 14 },
+        { area: 'Bodega', cantidad: 0, apartado: 0, v14: 0 },
+      ],
+    });
+    expect(nada.condiciones).toContain('agotado');
+    expect(nada.condiciones).not.toContain('sin_stock');
+    expect(nada.faltaEn).toEqual(['Casita 1']);
+    expect(nada.hayEn).toEqual([]);
+    expect(nada.prioridad).toBe('alta');
+    // Lo apartado por la web no cuenta como "hay": 5 físicas y 5 apartadas en Bodega = nada que mover.
+    const apartado = calcular({
+      piezas: 5,
+      porArea: [
+        { area: 'Casita 1', cantidad: 0, apartado: 0, v14: 14 },
+        { area: 'Bodega', cantidad: 5, apartado: 5, v14: 0 },
+      ],
+    });
+    expect(apartado.condiciones).toContain('agotado');
+    expect(apartado.hayEn).toEqual([]);
+    // hayEn va de más a menos y falta en las dos sucursales se lista junto.
+    const dos = calcular({
+      piezas: 50,
+      porArea: [
+        { area: 'Casita 1', cantidad: 0, apartado: 0, v14: 14 },
+        { area: 'Casita 2', cantidad: 0, apartado: 0, v14: 7 },
+        { area: 'Bodega', cantidad: 40, apartado: 0, v14: 0 },
+        { area: 'Refrigerador', cantidad: 10, apartado: 0, v14: 0 },
+      ],
+    });
+    expect(dos.faltaEn).toEqual(['Casita 1', 'Casita 2']);
+    expect(dos.hayEn).toEqual([{ area: 'Bodega', piezas: 40 }, { area: 'Refrigerador', piezas: 10 }]);
+  });
+
   it('sin fila NO es cero: si no está contado no hay "sin stock" ni cobertura', () => {
     const sinFila = calcular({ porArea: [] });
     expect(sinFila.condiciones).not.toContain('sin_stock');
+    expect(sinFila.condiciones).not.toContain('agotado');
+    expect(sinFila.faltaEn).toEqual([]);
     expect(sinFila.coberturaDias).toBeNull();
     expect(sinFila.prioridad).toBe('baja');
     const filaNula = calcular({ porArea: [{ area: 'Casita 1', cantidad: null, apartado: 0, v14: 14 }] });
@@ -46,7 +100,7 @@ describe('calcularCondiciones — por área de venta', () => {
     expect(casi.condiciones).toContain('bajo_stock');
     expect(casi.prioridad).toBe('alta');           // cobertura < 2 días
     const nada = calcular({ porArea: [{ area: 'Casita 1', cantidad: 10, apartado: 10, v14: 14 }] });
-    expect(nada.condiciones).toContain('sin_stock');
+    expect(nada.condiciones).toContain('agotado');
   });
 
   it('bajo stock: entre 0 y 7 días de cobertura (7 exactos ya no es bajo)', () => {
@@ -199,6 +253,7 @@ describe('calcularCondiciones — descontinuado, duplicado, sin alta, prioridad'
 
   it('prioridad: alta por sin stock, por cobertura < 2 o por desfasado; media por bajo stock', () => {
     expect(calcularPrioridad({ condiciones: ['sin_stock'], areas: [] })).toBe('alta');
+    expect(calcularPrioridad({ condiciones: ['agotado'], areas: [] })).toBe('alta');
     expect(calcularPrioridad({ condiciones: ['desfasado'], areas: [] })).toBe('alta');
     expect(calcularPrioridad({ condiciones: ['bajo_stock'], areas: [{ cobertura: 1.9 }] })).toBe('alta');
     expect(calcularPrioridad({ condiciones: ['bajo_stock'], areas: [{ cobertura: 2 }] })).toBe('media');
@@ -208,7 +263,7 @@ describe('calcularCondiciones — descontinuado, duplicado, sin alta, prioridad'
 
   it('las condiciones salen siempre en el orden de CONDICIONES (para que los badges no bailen)', () => {
     const r = condiciones({ alta: false, descontinuado: true, masVendido: true, porArea: [{ area: 'Casita 1', cantidad: 0, apartado: 0, v14: 14 }] });
-    expect(r).toEqual(['sin_stock', 'mas_vendidos', 'descontinuado', 'sin_alta']);
+    expect(r).toEqual(['agotado', 'mas_vendidos', 'descontinuado', 'sin_alta']);
   });
 });
 
@@ -247,7 +302,7 @@ describe('calcularCondiciones — números', () => {
   });
 
   it('cada condición tiene su texto de badge', () => {
-    expect(CONDICIONES).toHaveLength(14);
+    expect(CONDICIONES).toHaveLength(15);
     for (const id of CONDICIONES) expect(ETIQUETAS_CONDICION[id], id).toBeTruthy();
     expect(ETIQUETAS_CONDICION.sin_movimiento_90).toBe('Sin movimiento 90+ días');
     expect(ETIQUETAS_CONDICION.descontinuado).toBe('Descontinuado');
@@ -290,12 +345,16 @@ describe('condiciones dentro del snapshot (datos de la tienda)', () => {
     expect(dame('012000809996').prioridad).toBe('baja');
   });
 
-  it('sin la corrección del desfase, el agua contada en 0 sería "sin stock"', () => {
+  it('sin la corrección del desfase, el agua contada en 0 (y en ningún otro lado) sería "agotado"', () => {
     const s = armarSnapshot(datosCompletos({ desfases: [] }), OPCIONES);
     const agua = s.porCodigo.get('555555555555');
-    expect(agua.condiciones).toContain('sin_stock');
+    expect(agua.condiciones).toContain('agotado');
+    expect(agua.condiciones).not.toContain('sin_stock');
+    expect(agua.faltaEn).toEqual(['Casita 2']);
+    expect(agua.hayEn).toEqual([]);
     expect(agua.prioridad).toBe('alta');
-    expect(s.resumenDia.sinStock).toBe(1);
+    expect(s.resumenDia.agotados).toBe(1);
+    expect(s.resumenDia.sinStock).toBe(0);
   });
 
   it('marcar en el Admin un producto que sí vende lo vuelve descontinuado sin tocar sus otros badges', () => {

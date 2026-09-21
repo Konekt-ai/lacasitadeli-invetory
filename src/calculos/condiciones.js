@@ -8,6 +8,14 @@
 //   · "Descontinuado" SOLO viene de product_overrides.descontinuado = 1 (lo marca el
 //     dueño en el Admin). Lo demás que lleve tiempo sin venderse es "Sin movimiento".
 //   · Sin fila en un área ≠ cero: si no está contado no hay "sin stock" ni cobertura.
+//   · "Sin stock" (falta en anaquel) y "agotado" NO son lo mismo, y confundirlos fue
+//     la queja del jefe (2026-09-17): veía HUBBA BUBBA con 202 piezas bajo "Sin
+//     stock" porque en Casita 1 había 0 y las 202 estaban en Casita 2. Ahora:
+//       sin_stock = se vende en una sucursal, ahí hay 0, pero HAY en otra área
+//                   (lo que toca es MOVERLAS);
+//       agotado   = se vende y no hay en NINGUNA área contada (toca comprarlo).
+//     Los dos traen `faltaEn` (dónde falta) y `hayEn` (dónde sí hay) para que la
+//     tarjeta lo diga en una frase.
 //   · Un área DESFASADA (contada en 0 y se sigue vendiendo) tiene un 0 falso: no
 //     cuenta como "sin stock" ni da cobertura; su badge es "Desfasado: cuéntalo".
 //   · Lo apartado por la página web no está disponible (disponible = físico − apartado).
@@ -18,13 +26,14 @@
 import { diasEntre } from './fechas.js';
 
 export const CONDICIONES = [
-  'sin_stock', 'bajo_stock', 'sobrestock', 'mas_vendidos', 'lento',
+  'agotado', 'sin_stock', 'bajo_stock', 'sobrestock', 'mas_vendidos', 'lento',
   'sin_movimiento_30', 'sin_movimiento_60', 'sin_movimiento_90', 'sin_movimiento_180',
   'nuevo_sin_venta', 'descontinuado', 'duplicado_probable', 'sin_alta', 'desfasado',
 ];
 
 export const ETIQUETAS_CONDICION = {
-  sin_stock: 'Sin stock',
+  agotado: 'Agotado',
+  sin_stock: 'Falta en anaquel',
   bajo_stock: 'Bajo stock',
   sobrestock: 'Sobrestock',
   mas_vendidos: 'Más vendido',
@@ -111,7 +120,7 @@ export function tramoDe(dias, tramos = OPCIONES_CONDICIONES.tramosSinMovimiento)
 export function calcularPrioridad(r, opciones = {}) {
   const urgente = opciones.coberturaUrgenteDias ?? OPCIONES_CONDICIONES.coberturaUrgenteDias;
   const c = new Set(r.condiciones ?? []);
-  if (c.has('sin_stock') || c.has('desfasado')) return 'alta';
+  if (c.has('agotado') || c.has('sin_stock') || c.has('desfasado')) return 'alta';
   for (const a of r.areas ?? []) {
     if (a.cobertura !== null && a.cobertura !== undefined && a.cobertura < urgente) return 'alta';
   }
@@ -194,12 +203,22 @@ export function calcularCondiciones(p, opciones = {}) {
   const esNuevoSinVenta = nuncaVendido && referenciaNuevo !== null && referenciaNuevo < o.nuevoDias;
   const tramoSinMovimiento = esNuevoSinVenta ? 0 : tramoDe(diasSinMovimiento, o.tramosSinMovimiento);
 
+  // ── Dónde falta y dónde sí hay ──────────────────────────────────────────────
+  // faltaEn: sucursales donde se vende y hay 0 (con conteo real, no desfasado).
+  // hayEn: TODAS las áreas contadas con piezas disponibles (Bodega incluida), de
+  // más a menos: es lo que se puede mover.
+  const faltaEn = areas.filter(a => a.seVende && a.contado && !a.desfasada && a.disponible <= 0).map(a => a.area);
+  const hayEn = listaAreas(p.porArea)
+    .filter(a => a && contado(a) && num(a.cantidad) - num(a.apartado) > 0)
+    .map(a => ({ area: a.area, piezas: redondear(num(a.cantidad) - num(a.apartado)) }))
+    .sort((a, b) => b.piezas - a.piezas || a.area.localeCompare(b.area, 'es'));
+
   // ── Condiciones ─────────────────────────────────────────────────────────────
   const c = new Set();
+  if (faltaEn.length) c.add(hayEn.length ? 'sin_stock' : 'agotado');
   for (const a of areas) {
     if (!a.seVende || !a.contado || a.desfasada) continue;
-    if (a.disponible <= 0) c.add('sin_stock');
-    else if (a.cobertura !== null && a.cobertura < o.coberturaBajaDias) c.add('bajo_stock');
+    if (a.disponible > 0 && a.cobertura !== null && a.cobertura < o.coberturaBajaDias) c.add('bajo_stock');
   }
   // Sobrestock: muchas piezas y (alcanzan para más de N días, o no se vende desde
   // hace 30 días). Un producto NUEVO todavía no puede estar "de más": apenas llegó.
@@ -232,5 +251,7 @@ export function calcularCondiciones(p, opciones = {}) {
     coberturaDias,
     coberturaTiendaDias,
     areas,
+    faltaEn,
+    hayEn,
   };
 }

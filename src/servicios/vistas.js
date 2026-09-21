@@ -83,6 +83,9 @@ export function productoJson(p, { detalle = false, ahora } = {}) {
     clase: p.clase,
     etiqueta: ETIQUETAS[p.clase] ?? p.clase,
     condiciones: [...(p.condiciones ?? [])],
+    // Para que la tarjeta lo diga en una frase: "Falta en Casita 1 · hay 202 en Casita 2".
+    faltaEn: [...(p.faltaEn ?? [])],
+    hayEn: (p.hayEn ?? []).map(h => ({ area: h.area, piezas: redondear(h.piezas) })),
     prioridad: p.prioridad ?? 'baja',
     ventaDiaria: redondear(p.ventaDiaria),
     coberturaDias: p.coberturaDias ?? null,
@@ -151,6 +154,8 @@ export function productoDeCatalogo(c) {
     clase: 'catalogo',
     etiqueta: 'En catálogo de caja, sin existencia contada',
     condiciones: [],
+    faltaEn: [],
+    hayEn: [],
     prioridad: 'baja',
     ventaDiaria: 0,
     coberturaDias: null,
@@ -200,7 +205,7 @@ export function vistaEstado(snap, motor, usuario, { capacidades = {}, umbrales =
       : null,
     resumenDia: r
       ? {
-        urgentes: r.urgentes, piezasAMover: r.piezasAMover, sinStock: r.sinStock, bajoStock: r.bajoStock,
+        urgentes: r.urgentes, piezasAMover: r.piezasAMover, agotados: r.agotados ?? 0, sinStock: r.sinStock, bajoStock: r.bajoStock,
         sobrestock: r.sobrestock, sinMovimiento90: r.sinMovimiento90, descontinuados: r.descontinuados,
         alertas: r.alertas, alertasUrgentes: r.alertasUrgentes ?? 0,
       }
@@ -266,7 +271,12 @@ export function vistaInventario(snap, filtros = {}) {
   const qN = normalizar(q);
   const pagina = Math.max(1, Math.floor(Number(filtros.pagina)) || 1);
   const porPagina = Math.min(Math.max(Math.floor(Number(filtros.porPagina)) || POR_PAGINA, 1), POR_PAGINA_TOPE);
-  const soloConPiezas = filtros.soloConPiezas === undefined || filtros.soloConPiezas === '' ? true : siNo(filtros.soloConPiezas);
+  // Un agotado tiene 0 piezas por definición: si se filtra por esa condición, el
+  // "solo con piezas" (que es el default) dejaría la lista vacía debajo de una
+  // tarjeta que dice "248 agotados". Con esa condición se apaga solo.
+  const pideAgotados = condiciones.includes('agotado');
+  const soloConPiezas = pideAgotados ? false
+    : (filtros.soloConPiezas === undefined || filtros.soloConPiezas === '' ? true : siNo(filtros.soloConPiezas));
   const cocina = siNo(filtros.cocina);
 
   let lista = snap.productos;

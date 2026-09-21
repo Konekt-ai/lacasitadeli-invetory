@@ -62,6 +62,14 @@ describe('vistaInventario', () => {
     expect(codigos(vistaInventario(snap, { condiciones: 'sin_alta' }))).toEqual(['444444444444']);
     expect(codigos(vistaInventario(snap, { condiciones: 'bajo_stock' }))).toEqual(['333333333333', '666666666666']);
     expect(codigos(vistaInventario(snap, { condiciones: 'sin_stock' }))).toEqual([]);
+    expect(codigos(vistaInventario(snap, { condiciones: 'agotado' }))).toEqual([]);
+    // Al pedir agotados se ven aunque tengan 0 piezas (si no, la tarjeta "N agotados" abría una lista vacía).
+    const sinDesfase = armarSnapshot(datosCompletos({ desfases: [] }), OPCIONES);
+    const agotados = vistaInventario(sinDesfase, { condiciones: 'agotado' });
+    expect(codigos(agotados)).toEqual(['555555555555']);
+    expect(agotados.filtros.soloConPiezas).toBe(false);
+    expect(agotados.productos[0].faltaEn).toEqual(['Casita 2']);
+    expect(agotados.productos[0].hayEn).toEqual([]);
     // Pepsi tiene sobrestock Y sin movimiento 90+; el pumpkin pie es 180+ (tramo mayor), no 90.
     expect(codigos(vistaInventario(snap, { condiciones: 'sobrestock,sin_movimiento_90' }))).toEqual(['012000809996']);
     expect(codigos(vistaInventario(snap, { condiciones: ['sobrestock', 'sin_movimiento_180'] }))).toEqual(['999000000000']);
@@ -310,7 +318,7 @@ describe('vistaEstado', () => {
     const e = vistaEstado(snap, { calculando: false }, 'dueno', { capacidades: { solicitudes: true, fotos: true, overrides: true }, umbrales: { ...OPCIONES, sobrestockDias: 120, sobrestockMin: 24, topMasVendidos: 50 } });
     expect(e.listo).toBe(true);
     expect(e.usuario).toBe('dueno');
-    expect(e.resumenDia).toEqual({ urgentes: 2, piezasAMover: 32, sinStock: 0, bajoStock: 2, sobrestock: 4, sinMovimiento90: 2, descontinuados: 1, alertas: 12, alertasUrgentes: 4 });
+    expect(e.resumenDia).toEqual({ urgentes: 2, piezasAMover: 32, agotados: 0, sinStock: 0, bajoStock: 2, sobrestock: 4, sinMovimiento90: 2, descontinuados: 1, alertas: 12, alertasUrgentes: 4 });
     expect(e.coberturaSucursal).toEqual([
       { area: 'Casita 1', medianaDias: 6, productosQueVenden: 3, urgentes: 1 },
       { area: 'Casita 2', medianaDias: null, productosQueVenden: 1, urgentes: 1 },

@@ -30,9 +30,10 @@ Abajo, en el celular (arriba, en la computadora), están los cuatro módulos:
 
 ## 1. Inventario (la pantalla que abre primero)
 
-- **Resumen del día**: ocho tarjetas (urgentes, piezas a mover, sin stock, bajo
-  stock, sobrestock, sin movimiento 90+, descontinuados, alertas). Tocar una
-  aplica ese filtro a la lista.
+- **Resumen del día**: ocho tarjetas (urgentes, piezas a mover, **agotados**,
+  **falta en anaquel**, bajo stock, sobrestock, sin movimiento 90+,
+  descontinuados). Tocar una aplica ese filtro a la lista. (Las alertas tienen su
+  propio módulo abajo, con su número.)
 - **Cobertura por sucursal**: "42 d de cobertura" = con lo que se vende, a la
   mitad de los productos de Casita 1 les alcanza para 42 días. Tocar una sucursal
   filtra por esa área.
@@ -51,7 +52,8 @@ piezas por día, última venta, última entrada, rotación y sus **badges**.
 
 | Badge | Qué es | Qué hacer |
 |---|---|---|
-| **Sin stock** (rojo) | Se vende y en esa sucursal hay 0 | Surtirlo hoy |
+| **Agotado** (rojo) | Se vende y **no hay en ninguna área** (ni en Bodega) | Comprarlo |
+| **Falta en Casita 1** (rojo) | Se vende en esa sucursal y ahí hay **0**, pero **sí hay en otra área**. La tarjeta lo dice: *"Hay 0 en Casita 1 y se vende ahí. Sí hay 202 en Casita 2: hay que moverlas"* | Moverlas hoy (Resurtir) |
 | **Bajo stock** (ámbar) | Con lo que se vende, alcanza para menos de 7 días | Surtirlo pronto |
 | **Sobrestock** (morado) | Alcanza para más de 120 días (o no se vende y hay 24+ piezas) | No comprar más |
 | **Más vendido** (verde) | Está entre los 50 que más piezas venden en 30 días | Cuidar que no falte |
@@ -63,7 +65,11 @@ piezas por día, última venta, última entrada, rotación y sus **badges**.
 | **Sin alta en caja** (rojo, contorno) | La TC52 lo contó, pero la caja no conoce ese código: no se cobra bien | Darlo de alta en NovaCaja (Admin → Inventario) |
 | **Desfasado: cuéntalo** (rojo, contorno) | El sistema dice 0 y se sigue vendiendo | Contarlo con la TC52 (ver abajo) |
 
-**Prioridad**: **alta** = sin stock, alcanza para menos de 2 días o desfasado;
+> Ojo: un producto puede tener **"Falta en Casita 1"** y a la vez **"Sobrestock"**:
+> hay 0 donde se vende y 200 guardadas en otra área. No es una contradicción, es
+> justo lo que hay que arreglar moviéndolas.
+
+**Prioridad**: **alta** = agotado, falta en anaquel, alcanza para menos de 2 días o desfasado;
 **media** = bajo stock; **baja** = el resto.
 
 ---
@@ -75,7 +81,7 @@ piezas por día, última venta, última entrada, rotación y sus **badges**.
 - **Tarjetas**: urgentes, piezas a mover, transferencias sugeridas (hay en
   Bodega), sin respaldo en bodega (hay que comprarlo) y la sucursal más urgente.
 - **Filtros**: **Urgente hoy** (alcanza para menos de 2 días), **Próximos 3 días**,
-  **Próximos 7 días**; Sin stock / Bajo stock; sucursal; categoría; solo prioridad
+  **Próximos 7 días**; Hay 0 en la sucursal / Bajo stock; sucursal; categoría; solo prioridad
   alta; ver cocina; ver lo no contado.
 - **Cada tarjeta** dice: para qué sucursal, **cuántos días alcanza** (en grande), las
   piezas ahí, las piezas por día, las piezas en Bodega, la acción en texto y las

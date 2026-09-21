@@ -8,7 +8,7 @@ export type Area = { nombre: string; color: string };
 
 /** Ids de las condiciones (badges). Un producto puede tener varias. */
 export type Condicion =
-  | 'sin_stock' | 'bajo_stock' | 'sobrestock' | 'mas_vendidos' | 'lento'
+  | 'agotado' | 'sin_stock' | 'bajo_stock' | 'sobrestock' | 'mas_vendidos' | 'lento'
   | 'sin_movimiento_30' | 'sin_movimiento_60' | 'sin_movimiento_90' | 'sin_movimiento_180'
   | 'nuevo_sin_venta' | 'descontinuado' | 'duplicado_probable' | 'sin_alta' | 'desfasado';
 
@@ -47,6 +47,10 @@ export type Producto = {
   clase: string;
   etiqueta: string;
   condiciones: Condicion[];
+  /** Sucursales donde se vende y hay 0 (con conteo real). */
+  faltaEn: string[];
+  /** Áreas contadas con piezas disponibles, de más a menos (Bodega incluida). */
+  hayEn: Array<{ area: string; piezas: number }>;
   prioridad: Prioridad;
   ventaDiaria: number;
   coberturaDias: number | null;
@@ -103,7 +107,7 @@ export type Umbrales = {
 };
 
 export type ResumenDia = {
-  urgentes: number; piezasAMover: number; sinStock: number; bajoStock: number; sobrestock: number;
+  urgentes: number; piezasAMover: number; agotados: number; sinStock: number; bajoStock: number; sobrestock: number;
   sinMovimiento90: number; descontinuados: number; alertas: number; alertasUrgentes: number;
 };
 

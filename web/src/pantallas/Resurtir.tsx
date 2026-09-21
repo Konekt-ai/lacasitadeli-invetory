@@ -121,7 +121,7 @@ export function Resurtir({ estado }: { estado: Estado | null }) {
         <Opciones
           valor={condicion}
           alElegir={setCondicion}
-          opciones={[{ valor: '', texto: 'Todo' }, { valor: 'sin_stock', texto: 'Sin stock' }, { valor: 'bajo_stock', texto: 'Bajo stock' }]}
+          opciones={[{ valor: '', texto: 'Todo' }, { valor: 'sin_stock', texto: 'Hay 0 en la sucursal' }, { valor: 'bajo_stock', texto: 'Bajo stock' }]}
         />
         <Opciones
           valor={area}

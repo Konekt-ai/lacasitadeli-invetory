@@ -29,7 +29,7 @@ export const FILTROS_VACIOS: ValoresFiltros = {
 
 /** Orden en que se ofrecen las condiciones en la barra: primero lo que urge. */
 export const CONDICIONES_FILTRO: Condicion[] = [
-  'sin_stock', 'bajo_stock', 'desfasado', 'sobrestock', 'mas_vendidos', 'nuevo_sin_venta', 'lento',
+  'agotado', 'sin_stock', 'bajo_stock', 'desfasado', 'sobrestock', 'mas_vendidos', 'nuevo_sin_venta', 'lento',
   'sin_movimiento_30', 'sin_movimiento_60', 'sin_movimiento_90', 'sin_movimiento_180',
   'descontinuado', 'duplicado_probable', 'sin_alta',
 ];
